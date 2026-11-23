@@ -434,11 +434,12 @@ Open this folder in Godot 4.3+ and press F5 (pick an encounter), or copy easybat
                                battle_ended(result, rewards), to_dict()/from_dict() for Easy Save
   easybattle/battle_engine.gd  EasyBattleEngine: the deterministic engine (parity-tested with the TypeScript one)
   easybattle/battle_scene.*    the battle UI (uses res://easyui/themes/teak.tres when Easy UI is exported here)
-  easybattle/enemies, heroes   enemy strips and Easy Sprite hero sheets (side view, and <id>_back for the back view)
+  easybattle/enemies, heroes   enemy strips (<art>.png side view, <art>_front.png facing the camera for the back view) and Easy Sprite hero sheets (side view, and <id>_back for the back view)
   easybattle/portraits         Easy Portrait busts for the status cards
   easybattle/backdrops         back-view battlefields (paddy, forest)
   easyfont/                    มะขาม pixel fonts + EasyFont autoload (when Easy Font is installed)
 Layouts: Battle.start(setup, parent, {"layout": "backview", "status": "cards"}) or easybattle.json "ui".
+ATB: Battle.start(setup, parent, {"timing": "atb", "atbMode": "wait"}) (or "active"); main.gd: timing=atb.
   easybattle/fx, sfx           Easy FX strips and Easy SFX sounds the skills use (when bundled)
   test_battle.gd               godot --headless --path . --script res://test_battle.gd   → prints OK
   capture.gd                   frame capture for previews (needs a renderer)
