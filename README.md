@@ -52,6 +52,8 @@ MCP server; local only, no network.
 
 ### Back-view layout and status cards
 
+<img src="docs/assets/backview.png" alt="Back-view layout: Godot in Thai (left) and PixiJS in English (right), paddy pests on a rice-field backdrop, the party from behind with HP arcs and status cards" />
+
 `"ui": { "layout": "backview" }` switches to a 16-bit **back view**: a blue message window on top (message on the
 first row, a 3 × 2 command grid on the other two), enemies in a row on a paddy-field or forest-edge backdrop, the
 party seen from behind (Easy Sprite top-down sheets, back row, 2×) with curved HP gauges, and a row of **status
