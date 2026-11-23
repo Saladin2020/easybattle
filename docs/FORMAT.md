@@ -38,22 +38,27 @@ unique across documents (`check` names both files on a clash). Every display nam
 | enemy | `id`, `name`, `level`, `stats`, `skills [{ skill, weight }]`, `weak?`, `resist?`, `immune?`, `xp`, `coins`, `drops? [{ item, chance %, n? }]`, `loot?` (Easy Items loot table), `art` (built-in art: monkey, crab, mosquito, monitor, cobra, bat, boar, rooster, scorpion, bandit, mud, crocodile, tiger, kite, snail, rat, scarecrow), `palette?` (3 colours), `boss?` |
 | encounter | `id`, `name?`, `regions?` (Easy Tilemap overworld region ids), `cultures?` (thai · malay · chinese · rural · city · any), `terrains` (any · grass · forest · mountain · field · road · beach · water · town · cave), `rate` (average steps between fights), `groups [{ enemies (1–5 ids), weight, levelBonus? }]`, `music?`, `background?`, `scripted?` |
 | item | `item` (Easy Items id), `hp?`, `mp?`, `cures?`, `target?` (`ally` · `all_allies`) |
-| ui | one object per document (later documents win): `layout?` (`classic` · `backview`), `status?` (`rows` · `cards` · `none`; `backview` + `rows` becomes `cards` with a warning), `backdrop?` (`auto` · `paddy` · `forest`) |
+| ui | one object per document (later documents win): `layout?` (`classic` · `backview`), `status?` (`rows` · `cards` · `none`; `backview` + `rows` becomes `cards` with a warning), `backdrop?` (`auto` · `paddy` · `forest`), `timing?` (`turn` · `atb`), `atbMode?` (`wait` · `active`; only with `atb`) |
 
 ### Battle screen
 
 ```json
-{ "format": "easybattle/1", "id": "screen", "ui": { "layout": "backview", "status": "cards", "backdrop": "auto" } }
+{ "format": "easybattle/1", "id": "screen", "ui": { "layout": "backview", "status": "cards", "backdrop": "auto", "timing": "atb", "atbMode": "wait" } }
 ```
 
 * **classic** — side view (enemies left, party right), message bar on top; `rows` shows the HP / MP panel, `cards`
   the status cards along the bottom with the command list under the message bar.
 * **backview** — a blue message window (rows: message, then a 3 × 2 command grid, paged past six entries),
-  enemies standing in one row on the backdrop (feet on the horizon), the party from behind at 2× with a curved HP
+  enemies facing the camera in one row on the backdrop (feet on the horizon; `enemies/<art>_front.png`, idle bob),
+  the party from behind at 2× with a curved HP
   gauge each, and status cards at the bottom (`none` hides them).
 * **status cards** — Easy Portrait face (40 × 40 crop; worried at ≤ 30 % HP, sad when down, happy on a win), Lv,
   LIFE (HP) and POW (MP) with bars and numbers (four heroes: numbers only), and READY! for the hero choosing a
   command, WAIT... for everyone else, DOWN for fallen heroes. The highlighted card is the one that is READY!.
+* **timing** — `turn`: rounds, fastest first. `atb`: gauges fill by SPD + 10 per step (full = 1000, 30 steps / s);
+  full = READY! (hero menu opens, enemies act), the card's time bar (`cards[n].time`, behind the state label) shows
+  the fill. `atbMode: "wait"` stops time in menus, `"active"` does not. Seeded and step-based, so it is
+  deterministic (engine: `advance(steps, menuOpen)`, `ready()`, `readyActor()`, `act(action, who)`).
 
 Exports write `ui` into `easybattle.json` with the resolved settings, the rectangles for every layout × status ×
 party size (`ui.layouts["backview:cards"]["3"]`), the labels (`ui.text`, th / en / ms) and sheet rows / frames.

@@ -52,10 +52,11 @@ MCP server; local only, no network.
 
 ### Back-view layout and status cards
 
-<img src="docs/assets/backview.png" alt="Back-view layout: Godot in Thai (left) and PixiJS in English (right), paddy pests on a rice-field backdrop, the party from behind with HP arcs and status cards" />
+<img src="docs/assets/backview.png" alt="Back-view layout with ATB: Godot in Thai (left, front-facing paddy pests, everyone WAIT... over green time bars) and PixiJS in English (right, active mode: a monkey acts while two heroes are READY!)" />
 
 `"ui": { "layout": "backview" }` switches to a 16-bit **back view**: a blue message window on top (message on the
-first row, a 3 × 2 command grid on the other two), enemies in a row on a paddy-field or forest-edge backdrop, the
+first row, a 3 × 2 command grid on the other two), enemies **facing the camera** in a row on a paddy-field or
+forest-edge backdrop (front-view art with an idle bob and a white hit flash; the classic view keeps the side art), the
 party seen from behind (Easy Sprite top-down sheets, back row, 2×) with curved HP gauges, and a row of **status
 cards**: Easy Portrait face (worried at low HP, sad when down), Lv badge, LIFE and POW (MP) bars with numbers and
 **READY! / WAIT... / DOWN** from turn order. Cards also work in the classic layout (`"status": "cards"`). Battle text
@@ -68,9 +69,30 @@ The classic side view stays the default, and older exports (without `ui`) keep w
 | `layout` | `classic` (side view, default) · `backview` |
 | `status` | `rows` (classic HP / MP panel, default for classic) · `cards` (default for backview) · `none` |
 | `backdrop` | `auto` (forest for forest / mountain / cave terrain, else paddy) · `paddy` · `forest` |
+| `timing` | `turn` (rounds in SPD order, default) · `atb` (active time battle) |
+| `atbMode` | `wait` (time stops while a command menu is open, default) · `active` (time keeps running) |
 
 Set it in any document, override per battle with `Battle.start(setup, parent, {"layout": "backview"})` (Godot) or
 `start(app, setup, { layout: "backview", status: "cards" })` (Pixi), or try `index.html?layout=backview`.
+
+### ATB (active time battle)
+
+`"ui": { "timing": "atb" }` swaps rounds for **time gauges**: every fighter's gauge fills by SPD + 10 per time
+step (30 steps a second at speed 1; a full gauge is 1000). A full gauge reads **READY!** and opens that hero's
+command menu; everyone else reads **WAIT...** over a time bar that fills along the bottom of the status card
+(green while filling, orange-red when full). Enemies act as soon as theirs fill. `"atbMode": "wait"` stops time
+while you choose; `"active"` keeps it running, so an enemy can act in the middle of your choice (your menu comes
+back afterwards). Start gauges are random but seeded (a second mulberry32 stream), and time moves in whole steps,
+so the same seed and the same inputs give the same battle in TypeScript, Pixi and Godot (`parity.json` has
+`atb_wait` and `atb_active` cases). Poison, regen and status turns tick when the fighter acts; a round counter
+advances every 60 steps.
+
+```gdscript
+Battle.start(setup, self, {"layout": "backview", "timing": "atb", "atbMode": "active"})
+```
+```js
+eb.start(app, setup, { layout: "backview", timing: "atb", atbMode: "wait" }); // or index.html?timing=atb&atb=active
+```
 
 ## Starter battles
 

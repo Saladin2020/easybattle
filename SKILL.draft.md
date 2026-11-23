@@ -22,7 +22,9 @@ Easy Battle **validates, simulates and exports** `easybattle/1` battle databases
    40–70 % against bosses one or two levels early.
 5. **Look.** `render --what battle|bestiary --out <png>` and open the PNG. For a 16-bit back-view screen (blue
    window, party from behind, HP arcs, portrait status cards with READY!/WAIT...) set `"ui": {"layout": "backview"}`
-   in a document and preview with `render --layout backview --status cards`.
+   in a document and preview with `render --layout backview --status cards`. For active time battle add
+   `"timing": "atb"` (gauges fill by SPD, READY!/WAIT... with time bars on the cards) and `"atbMode": "wait"` (time
+   stops in menus) or `"active"`.
 6. **Export.** `export --preset godot` or `pixi`; for Godot run `test_battle.gd` headless and expect `OK`.
 
 ## Rules
