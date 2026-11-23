@@ -451,19 +451,21 @@ class BattleUI {
       const lifeV = this.ptext("", "makham-16", 0xffffff);
       const pow = this.ptext(R.compact ? "" : this.t("pow"), "makham-16", 0xd0e4ff);
       const powV = this.ptext("", "makham-16", 0xffffff);
-      const state = this.ptext("", "makham-16", CARD.wait);
+      const state = this.ptext("", "makham-16", 0xffffff); // white base: tint gives the exact state colour
       life.label = "life";
       lifeV.label = "life-value";
       pow.label = "pow";
       powV.label = "pow-value";
       state.label = "state";
+      const shadow = this.ptext("", "makham-16", 0x0d0906); // 1 px drop shadow keeps the label readable on the time bar
+      shadow.label = "state-shadow";
       lv.label = "lv";
       const bars = new P.Graphics();
       const time = new P.Graphics();
       time.label = "time";
-      c.addChild(bg, portrait, bars, time, lvBg, lv, life, lifeV, pow, powV, state);
+      c.addChild(bg, portrait, bars, time, lvBg, lv, life, lifeV, pow, powV, shadow, state);
       this.view.addChild(c);
-      return { i, R, c, bg, portrait, faces, lv, life, lifeV, pow, powV, state, bars, time };
+      return { i, R, c, bg, portrait, faces, lv, life, lifeV, pow, powV, state, shadow, bars, time };
     });
   }
 
@@ -516,9 +518,13 @@ class BattleUI {
       bar(R.lifeBar, Math.max(0, ratio), lc);
       bar(R.powBar, a.max.mp ? a.mp / a.max.mp : 0, CARD.pow);
       this.setText(k.state, this.t(st));
-      k.state.tint = st === "ready" ? CARD.ready : st === "down" ? CARD.down : this.atb ? TIME.waitText : CARD.wait;
-      if (!k.state.__pixel) k.state.style.fill = k.state.tint;
+      const sc = st === "ready" ? CARD.ready : st === "down" ? CARD.down : this.atb ? TIME.waitText : CARD.wait;
+      if (k.state.__pixel) k.state.tint = sc;
+      else k.state.style.fill = sc;
       this.place(k.state, R.state.x + Math.round((R.state.w - this.textWidth(k.state)) / 2), R.state.y);
+      this.setText(k.shadow, this.atb ? this.t(st) : "");
+      if (!k.shadow.__pixel) k.shadow.style.fill = 0x0d0906;
+      k.shadow.position.set(k.state.x + 1, k.state.y + 1);
       k.c.alpha = 1;
     }
     this.drawTimeBars();

@@ -759,6 +759,11 @@ func _refresh_cards() -> void:
 		e["bars"].paint(cmds)
 		_set_text(e["state"], _t(st))
 		e["state"].add_theme_color_override("font_color", CARD["ready"] if st == "ready" else (CARD["down"] if st == "down" else (TIME["wait_text"] if _atb else CARD["wait"])))
+		if _atb:
+			# 1 px drop shadow keeps the label readable on the time bar
+			e["state"].add_theme_color_override("font_shadow_color", TIME["edge"])
+			e["state"].add_theme_constant_override("shadow_offset_x", 1)
+			e["state"].add_theme_constant_override("shadow_offset_y", 1)
 		var sr := _rect(R["state"])
 		_place(e["state"], sr.position.x + roundf((sr.size.x - _text_w(e["state"])) / 2.0), sr.position.y)
 	_draw_time_bars()
