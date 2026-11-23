@@ -1,5 +1,5 @@
 /**
- * Enemy battlers drawn from code (no source images, no AI): 14 creatures on 48×48 (bosses 80×64), facing left
+ * Enemy battlers drawn from code (no source images, no AI): 17 creatures on 48×48 (bosses 80×64), facing left
  * toward the party. Two idle frames (bob) and a white hurt frame per enemy. CC0.
  */
 import type { EnemyArt } from "../shared/types.js";
@@ -9,6 +9,7 @@ export const OUTLINE = "#1a0f0a";
 export const ART_SIZE: Record<EnemyArt, [number, number]> = {
   monkey: [48, 48], crab: [48, 48], mosquito: [48, 48], monitor: [48, 48], cobra: [48, 48], bat: [48, 48], boar: [48, 48],
   rooster: [48, 48], scorpion: [48, 48], bandit: [48, 48], mud: [48, 48], kite: [48, 48], crocodile: [80, 64], tiger: [80, 64],
+  snail: [48, 48], rat: [48, 48], scarecrow: [48, 48],
 };
 export const DEFAULT_PALETTE: Record<EnemyArt, string[]> = {
   monkey: ["#8a5a32", "#e0b48a", "#f2d04a"],
@@ -25,6 +26,9 @@ export const DEFAULT_PALETTE: Record<EnemyArt, string[]> = {
   kite: ["#2a8a5c", "#f4ae3d", "#c8402e"],
   crocodile: ["#4e6a3a", "#c8c08a", "#f7ebd3"],
   tiger: ["#e0802a", "#f7ebd3", "#2a1a10"],
+  snail: ["#c9a227", "#b8a88a", "#8a4a2a"],
+  rat: ["#7a6248", "#c8b090", "#e89a9a"],
+  scarecrow: ["#c8a050", "#4f6ea8", "#d8b060"],
 };
 
 function eye(r: Raster, x: number, y: number, size = 3, pupil = OUTLINE, white = "#fffaf0") {
@@ -221,6 +225,63 @@ const DRAW: Record<EnemyArt, (r: Raster, p: string[]) => void> = {
     r.ellipse(20, 22, 10, 9, a!);
     eye(r, 22, 24, 4, OUTLINE, "#f2d04a");
     for (const x of [26, 40, 52]) r.rect(x, 48, 6, 8, shade(a!, -0.35));
+  },
+  snail(r, [a, b, c]) {
+    // golden apple snail: a paddy pest. Foot and head reach left, eye stalks up.
+    r.poly([[2, 36], [10, 30], [36, 31], [42, 38], [4, 40]], b!);
+    r.rect(4, 38, 36, 2, shade(b!, -0.3));
+    r.line(6, 31, 3, 22, b!);
+    r.line(10, 30, 9, 21, b!);
+    r.rect(2, 21, 2, 2, OUTLINE);
+    r.rect(8, 20, 2, 2, OUTLINE);
+    blob(r, 14, 8, 28, 26, a!);
+    r.ellipse(20, 13, 16, 15, shade(a!, 0.12));
+    r.ellipse(24, 17, 9, 8, shade(a!, -0.2));
+    r.ellipse(26, 19, 4, 4, c!);
+    r.line(16, 22, 22, 30, c!);
+    r.line(30, 10, 38, 20, shade(a!, -0.35));
+    r.rect(6, 34, 3, 1, shade(b!, -0.4));
+  },
+  rat(r, [a, b, c]) {
+    // paddy-field rat with a long tail
+    r.line(34, 34, 43, 30, c!);
+    r.line(43, 30, 43, 22, c!);
+    blob(r, 12, 20, 26, 18, a!);
+    r.ellipse(16, 28, 16, 9, b!);
+    blob(r, 4, 16, 16, 14, a!);
+    r.ellipse(12, 12, 7, 7, a!);
+    r.ellipse(13, 13, 4, 4, c!);
+    r.ellipse(18, 11, 7, 7, a!);
+    r.ellipse(19, 12, 4, 4, c!);
+    r.rect(2, 24, 3, 3, c!);
+    r.rect(5, 28, 2, 3, "#fffaf0");
+    eye(r, 8, 20, 3, OUTLINE, "#fffaf0");
+    for (const x of [14, 28]) r.rect(x, 37, 5, 4, shade(a!, -0.3));
+    r.line(4, 26, -1, 25, shade(b!, -0.2));
+  },
+  scarecrow(r, [a, b, c]) {
+    // a restless paddy scarecrow: ngob hat, painted sack face, straw hands. Not a spirit of any faith.
+    r.rect(21, 30, 3, 14, "#7a5232");
+    r.rect(2, 20, 40, 3, "#8a6238");
+    for (const x of [0, 39]) {
+      r.line(x, 18, x + 3, 21, a!);
+      r.line(x, 24, x + 3, 22, a!);
+      r.line(x + 1, 21, x + 3, 21, a!);
+    }
+    r.poly([[12, 18], [32, 18], [34, 32], [10, 32]], b!);
+    for (let y = 20; y < 32; y += 4) r.rect(11, y, 23, 1, shade(b!, -0.25));
+    r.rect(21, 18, 2, 14, shade(b!, 0.2));
+    r.poly([[10, 31], [34, 31], [36, 36], [8, 36]], a!);
+    for (let x = 9; x < 36; x += 3) r.rect(x, 35, 1, 3, shade(a!, -0.25));
+    r.ellipse(15, 8, 14, 12, "#e8d0a0");
+    r.rect(17, 12, 3, 1, OUTLINE);
+    r.rect(24, 12, 3, 1, OUTLINE);
+    r.rect(18, 16, 8, 1, "#a8402e");
+    r.rect(18, 15, 1, 1, "#a8402e");
+    r.rect(25, 15, 1, 1, "#a8402e");
+    r.poly([[2, 9], [22, 0], [42, 9], [36, 11], [8, 11]], c!);
+    r.poly([[14, 6], [22, 1], [30, 6]], shade(c!, 0.2));
+    r.rect(6, 10, 32, 1, shade(c!, -0.35));
   },
   tiger(r, [a, b, c]) {
     r.line(64, 30, 76, 18, a!);

@@ -1,4 +1,4 @@
-import { CULTURES, DEFAULT_RULES, ENEMY_ART, FORMAT, SKILL_KINDS, STATS, STATUS_KINDS, TARGETS, TERRAINS, type BattleDb, type BattleDoc, type Diagnostic, type Rules } from "./types.js";
+import { CULTURES, DEFAULT_RULES, ENEMY_ART, FORMAT, SKILL_KINDS, STATS, STATUS_KINDS, TARGETS, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, type BattleDb, type BattleDoc, type Diagnostic, type Rules } from "./types.js";
 
 export const SAFE_ID = /^[a-z0-9][a-z0-9_-]*$/;
 /** Words that must not appear in names: no sacred figures, scripture or calligraphy as game content. */
@@ -41,6 +41,16 @@ export function checkDoc(raw: unknown, d: Diags, file: string) {
   if (raw.name !== undefined) checkName(raw.name, d, `${file}.name`);
   for (const k of LISTS) if (raw[k] !== undefined && !Array.isArray(raw[k])) d.error(`${file}.${k}`, "must be an array");
   if (raw.rules !== undefined && !isObj(raw.rules)) d.error(`${file}.rules`, "must be an object");
+  if (raw.ui !== undefined) {
+    if (!isObj(raw.ui)) d.error(`${file}.ui`, "must be an object");
+    else {
+      const ui = raw.ui;
+      if (ui.layout !== undefined && !(UI_LAYOUTS as readonly unknown[]).includes(ui.layout)) d.error(`${file}.ui.layout`, `layout must be one of ${UI_LAYOUTS.join(", ")}`);
+      if (ui.status !== undefined && !(UI_STATUS as readonly unknown[]).includes(ui.status)) d.error(`${file}.ui.status`, `status must be one of ${UI_STATUS.join(", ")}`);
+      if (ui.backdrop !== undefined && !(UI_BACKDROPS as readonly unknown[]).includes(ui.backdrop)) d.error(`${file}.ui.backdrop`, `backdrop must be one of ${UI_BACKDROPS.join(", ")}`);
+      if (ui.layout === "backview" && ui.status === "rows") d.warn(`${file}.ui.status`, "the backview layout has no HP rows; it shows status cards instead");
+    }
+  }
   const arr = (k: (typeof LISTS)[number]) => (Array.isArray(raw[k]) ? (raw[k] as unknown[]) : []);
   arr("elements").forEach((e, i) => {
     const p = `${file}.elements[${i}]`;
@@ -124,12 +134,13 @@ export function checkDoc(raw: unknown, d: Diags, file: string) {
 /** Merge documents (ids unique across files) and check references. */
 export function buildDb(docs: Array<{ file: string; doc: unknown }>): { db: BattleDb; errors: Diagnostic[]; warnings: Diagnostic[] } {
   const d = new Diags();
-  const db: BattleDb = { rules: structuredClone(DEFAULT_RULES), elements: [], statuses: [], skills: [], heroes: [], enemies: [], encounters: [], items: [], sources: {} };
+  const db: BattleDb = { rules: structuredClone(DEFAULT_RULES), elements: [], statuses: [], skills: [], heroes: [], enemies: [], encounters: [], items: [], ui: {}, sources: {} };
   for (const { file, doc } of docs) {
     const before = d.errors.length;
     checkDoc(doc, d, file);
     if (d.errors.length > before || !isObj(doc)) continue;
     const bd = doc as unknown as BattleDoc;
+    if (bd.ui) db.ui = { ...db.ui, ...bd.ui };
     if (bd.rules) db.rules = { ...db.rules, ...bd.rules, xp: { ...db.rules.xp, ...(bd.rules.xp ?? {}) }, terrainCodes: { ...db.rules.terrainCodes, ...(bd.rules.terrainCodes ?? {}) } } as Rules;
     for (const k of LISTS) {
       const key = k === "items" ? "item" : "id";

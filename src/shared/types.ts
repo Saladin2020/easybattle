@@ -14,8 +14,17 @@ export type Terrain = (typeof TERRAINS)[number];
 export const CULTURES = ["thai", "malay", "chinese", "rural", "city", "any"] as const;
 export const EXPORT_PRESETS = ["godot", "pixi", "png", "json", "all"] as const;
 export type ExportPreset = (typeof EXPORT_PRESETS)[number];
-export const ENEMY_ART = ["monkey", "crab", "mosquito", "monitor", "cobra", "bat", "boar", "rooster", "scorpion", "bandit", "mud", "crocodile", "tiger", "kite"] as const;
+export const ENEMY_ART = ["monkey", "crab", "mosquito", "monitor", "cobra", "bat", "boar", "rooster", "scorpion", "bandit", "mud", "crocodile", "tiger", "kite", "snail", "rat", "scarecrow"] as const;
 export type EnemyArt = (typeof ENEMY_ART)[number];
+/** Battle screen layouts: classic side view (default) or a 16-bit style back view of the party. */
+export const UI_LAYOUTS = ["classic", "backview"] as const;
+export type UiLayout = (typeof UI_LAYOUTS)[number];
+/** Party status: HP / MP rows (classic only), portrait status cards, or nothing. */
+export const UI_STATUS = ["rows", "cards", "none"] as const;
+export type UiStatus = (typeof UI_STATUS)[number];
+/** Back-view battlefield: auto (from the terrain), paddy field or forest edge. */
+export const UI_BACKDROPS = ["auto", "paddy", "forest"] as const;
+export type UiBackdrop = (typeof UI_BACKDROPS)[number];
 
 export interface Name {
   th: string;
@@ -77,6 +86,8 @@ export interface HeroDef {
   resist?: string[];
   /** Easy Sprite sheet id / path (engine side) and Easy Portrait / Easy Dialogue portrait set. */
   sprite?: string;
+  /** Easy Sprite top-down sheet whose "back" row draws the hero from behind in the backview layout (default <id>_back). */
+  back?: string;
   portrait?: string;
   color?: string;
 }
@@ -162,6 +173,14 @@ export interface Rules {
   terrainCodes: Record<string, Terrain>;
 }
 
+/** Battle screen options (later documents override earlier ones; runtime opts override these). */
+export interface UiSettings {
+  layout?: UiLayout;
+  /** Default: rows for classic, cards for backview (backview has no rows). */
+  status?: UiStatus;
+  backdrop?: UiBackdrop;
+}
+
 export interface BattleDoc {
   format: typeof FORMAT;
   id?: string;
@@ -174,6 +193,7 @@ export interface BattleDoc {
   enemies?: EnemyDef[];
   encounters?: EncounterTable[];
   items?: BattleItem[];
+  ui?: UiSettings;
 }
 
 export interface Diagnostic {
@@ -191,6 +211,7 @@ export interface BattleDb {
   enemies: EnemyDef[];
   encounters: EncounterTable[];
   items: BattleItem[];
+  ui: UiSettings;
   sources: Record<string, string>;
 }
 
