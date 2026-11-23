@@ -6,7 +6,9 @@ import { canon } from "../shared/canon.js";
 import { Battle, groupSeed, PARITY_SETUP, rollGroup, type Action, type BattleSetup } from "../shared/engine.js";
 import { mulberry32 } from "../shared/rng.js";
 import { EXPORT_PRESETS, type BattleDb, type ExportPreset } from "../shared/types.js";
+import { exportLayouts, HERO_FRAMES, PORTRAIT_CROP, resolveUi, SHEET_ROW, UI_TEXT } from "../shared/layout.js";
 import { drawEnemy, enemyStrip } from "./art.js";
+import { BACKDROPS, drawBackdrop } from "./backdrop.js";
 import { FONT_DIR, pkgRoot, resolveInside, RUNTIME_DIR, Writer } from "./fsx.js";
 import { encodePng } from "./png.js";
 import { Raster } from "./raster.js";
@@ -21,6 +23,8 @@ export interface ExportOptions {
   out?: string;
   /** Render the Easy FX effects and Easy SFX sounds skills use into fx/ and sfx/ (default: when the tools are installed). */
   bundle?: boolean;
+  /** Bundle the มะขาม 16 / มะขาม 8 pixel fonts from Easy Font (default: when the tool is installed; else Kanit). */
+  font?: boolean;
   trustedPaths?: boolean;
 }
 
@@ -31,6 +35,8 @@ export interface ExportResult {
   enemies: number;
   fx: string[];
   sfx: string[];
+  /** Easy Font fonts bundled (empty: Kanit fallback). */
+  fonts: string[];
   warnings: string[];
 }
 
@@ -130,6 +136,54 @@ async function heroSheet(root: string, id: string): Promise<Buffer | null> {
   return null;
 }
 
+async function portraitStrip(root: string, id: string): Promise<Buffer | null> {
+  for (const p of [path.join(root, "portraits", `${id}.png`), path.join(pkgRoot, "assets", "portraits", `${id}.png`)]) if (existsSync(p)) return readFile(p);
+  return null;
+}
+
+/** Sheet ids per hero: side view, back view (Easy Sprite top-down sheet) and portrait strip. */
+export function heroArt(h: { id: string; sprite?: string; back?: string; portrait?: string }) {
+  return { side: h.sprite ?? h.id, back: h.back ?? `${h.id}_back`, portrait: h.portrait ?? h.id };
+}
+
+/** Battle screen data shared by both runtimes (layout rectangles, labels, frames). */
+function uiData(db: BattleDb, fonts: string[]) {
+  return { ...resolveUi(db.ui), fonts, layouts: exportLayouts(), text: UI_TEXT, portraitCrop: PORTRAIT_CROP, sheetRow: SHEET_ROW, heroFrames: HERO_FRAMES, backdrops: BACKDROPS.map((b) => `backdrops/backview_${b}.png`) };
+}
+
+/** Copy มะขาม 16 / มะขาม 8 from an Easy Font export (sibling CLI). Returns the font ids bundled. */
+async function bundleFont(w: Writer, res: ExportResult, engine: "godot" | "pixi"): Promise<string[]> {
+  const cli = siblingCli("easyfont");
+  if (!cli) {
+    res.warnings.push("Easy Font not found: battle text uses Kanit instead of the มะขาม pixel fonts (set EASYBATTLE_EASYFONT_CLI)");
+    return [];
+  }
+  const want = ["makham-16", "makham-8"];
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "easybattle-font-"));
+  try {
+    await runSibling(cli, ["init", `--workspace=${tmp}`]);
+    await runSibling(cli, ["export", "--preset", engine, `--workspace=${tmp}`]);
+    const src = path.join(tmp, "exports", `easyfont-${engine}`);
+    const fontDir = engine === "godot" ? path.join(src, "easyfont") : path.join(src, "fonts");
+    const manifest = JSON.parse(await readFile(path.join(fontDir, "fonts.json"), "utf8")) as { default?: string; fonts: Array<{ id: string; fnt: string; png: string }> };
+    const fonts = manifest.fonts.filter((f) => want.includes(f.id));
+    if (fonts.length !== want.length) throw new Error(`Easy Font has ${manifest.fonts.map((f) => f.id).join(", ")}; need ${want.join(", ")}`);
+    const dest = engine === "godot" ? "easyfont/" : "font/fonts/";
+    await w.write(`${dest}fonts.json`, `${JSON.stringify({ ...manifest, default: "makham-16", fonts }, null, 2)}
+`);
+    for (const f of fonts) for (const file of [f.fnt, f.png]) await w.copy(path.join(fontDir, file), `${dest}${file}`);
+    await w.copy(path.join(fontDir, "OFL.txt"), `${dest}OFL.txt`);
+    if (engine === "godot") for (const f of ["easyfont.gd", "thai_shaper.gd"]) await w.copy(path.join(fontDir, f), `easyfont/${f}`);
+    else for (const f of ["easyfont-pixi.js", "easyfont-core.js"]) await w.copy(path.join(src, f), `font/${f}`);
+    return want;
+  } catch (e) {
+    res.warnings.push(`easyfont: ${(e as Error).message.split("\n")[0]}; battle text uses Kanit`);
+    return [];
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+}
+
 async function writeArt(w: Writer, root: string, db: BattleDb, res: ExportResult, sub: string) {
   for (const art of new Set(db.enemies.map((e) => e.art))) {
     const e = db.enemies.find((x) => x.art === art)!;
@@ -137,9 +191,20 @@ async function writeArt(w: Writer, root: string, db: BattleDb, res: ExportResult
     await w.write(`${sub}enemies/${art}.png`, encodePng(s.width, s.height, s.data));
   }
   for (const h of db.heroes) {
-    const png = await heroSheet(root, h.sprite ?? h.id);
-    if (png) await w.write(`${sub}heroes/${h.sprite ?? h.id}.png`, png);
-    else res.warnings.push(`hero ${h.id}: no Easy Sprite side-view sheet (sprites/${h.sprite ?? h.id}.png); the hero is invisible`);
+    const art = heroArt(h);
+    const png = await heroSheet(root, art.side);
+    if (png) await w.write(`${sub}heroes/${art.side}.png`, png);
+    else res.warnings.push(`hero ${h.id}: no Easy Sprite side-view sheet (sprites/${art.side}.png); the hero is invisible`);
+    const back = await heroSheet(root, art.back);
+    if (back) await w.write(`${sub}heroes/${art.back}.png`, back);
+    else res.warnings.push(`hero ${h.id}: no Easy Sprite top-down sheet for the backview layout (sprites/${art.back}.png); the side view is used`);
+    const face = await portraitStrip(root, art.portrait);
+    if (face) await w.write(`${sub}portraits/${art.portrait}.png`, face);
+    else res.warnings.push(`hero ${h.id}: no Easy Portrait strip (portraits/${art.portrait}.png); status cards show the hero colour`);
+  }
+  for (const b of BACKDROPS) {
+    const r = drawBackdrop(b);
+    await w.write(`${sub}backdrops/backview_${b}.png`, encodePng(r.width, r.height, r.data));
   }
 }
 
@@ -149,7 +214,7 @@ export async function exportBattle(root: string, opts: ExportOptions = {}): Prom
   if (!EXPORT_PRESETS.includes(preset)) throw new Error(`Unknown preset ${preset} (${EXPORT_PRESETS.join(", ")})`);
   if (preset === "all" && opts.out) throw new Error("--out needs a single preset (godot, pixi, png or json)");
   const presets: ExportPreset[] = preset === "all" ? ["godot", "pixi", "png", "json"] : [preset];
-  const res: ExportResult = { dirs: [], files: [], heroes: db.heroes.length, enemies: db.enemies.length, fx: [], sfx: [], warnings: [] };
+  const res: ExportResult = { dirs: [], files: [], heroes: db.heroes.length, enemies: db.enemies.length, fx: [], sfx: [], fonts: [], warnings: [] };
   for (const p of presets) {
     const out = opts.out ? (opts.trustedPaths ? path.resolve(root, opts.out) : resolveInside(root, opts.out)) : path.join(dirs(root).exports, `easybattle-${p}`);
     const w = new Writer(out);
@@ -157,8 +222,8 @@ export async function exportBattle(root: string, opts: ExportOptions = {}): Prom
     res.sfx = [];
     if (p === "json") await w.write("easybattle.db.json", `${JSON.stringify(db, null, 2)}\n`);
     if (p === "png") await exportPng(w, db);
-    if (p === "pixi") await exportPixi(w, root, db, res, opts.bundle !== false);
-    if (p === "godot") await exportGodot(w, root, db, res, opts.bundle !== false);
+    if (p === "pixi") await exportPixi(w, root, db, res, opts.bundle !== false, opts.font !== false);
+    if (p === "godot") await exportGodot(w, root, db, res, opts.bundle !== false, opts.font !== false);
     res.dirs.push(out);
     res.files.push(...w.files);
   }
@@ -198,10 +263,11 @@ async function itemNamesFor(root: string, db: BattleDb) {
   return Object.fromEntries([...used].filter((id) => all[id]).sort().map((id) => [id, all[id]!]));
 }
 
-async function exportPixi(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean) {
+async function exportPixi(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean, font: boolean) {
   await writeArt(w, root, db, res, "");
   if (bundle) await bundleAssets(w, db, res);
-  await w.write("easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db) }, null, 2)}\n`);
+  res.fonts = font ? await bundleFont(w, res, "pixi") : [];
+  await w.write("easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db), ui: uiData(db, res.fonts) }, null, 2)}\n`);
   await w.copy(path.join(RUNTIME_DIR, "pixi", "easybattle-core.js"), "easybattle-core.js");
   await w.copy(path.join(RUNTIME_DIR, "pixi", "easybattle-pixi.js"), "easybattle-pixi.js");
   for (const f of ["Kanit-Regular.ttf", "OFL.txt"]) await w.copy(path.join(FONT_DIR, f), `fonts/${f}`);
@@ -278,11 +344,12 @@ function pixiDemo(db: BattleDb): string {
 }
 
 // ---------------------------------------------------------------- Godot
-async function exportGodot(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean) {
+async function exportGodot(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean, font: boolean) {
   const g = path.join(RUNTIME_DIR, "godot");
   await writeArt(w, root, db, res, "easybattle/");
   if (bundle) await bundleAssets(w, db, res, "easybattle/");
-  await w.write("easybattle/easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db) }, null, 2)}\n`);
+  res.fonts = font ? await bundleFont(w, res, "godot") : [];
+  await w.write("easybattle/easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db), ui: uiData(db, res.fonts) }, null, 2)}\n`);
   await w.write("easybattle/parity.json", `${JSON.stringify({ cases: parityCases(db), encounters: encounterParity(db) }, null, 2)}\n`);
   for (const f of ["easybattle.gd", "battle_engine.gd", "battle_scene.gd", "battle_scene.tscn"]) await w.copy(path.join(g, f), `easybattle/${f}`);
   for (const f of ["Kanit-Regular.ttf", "OFL.txt"]) await w.copy(path.join(FONT_DIR, f), `easybattle/fonts/${f}`);
@@ -310,7 +377,7 @@ config/features=PackedStringArray("4.3")
 [autoload]
 
 Battle="*res://easybattle/easybattle.gd"
-
+${res.fonts.length ? 'EasyFont="*res://easyfont/easyfont.gd"\n' : ""}
 [display]
 
 window/size/viewport_width=480

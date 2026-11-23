@@ -306,11 +306,12 @@ program
   .option("--preset <p>", EXPORT_PRESETS.join(" | "), "all")
   .option("--out <dir>", "Output folder (single preset)")
   .option("--no-bundle", "Do not render Easy FX / Easy SFX assets into the export")
+  .option("--no-font", "Do not bundle the มะขาม pixel fonts from Easy Font (battle text falls back to Kanit)")
   .option("--workspace <path>")
   .option("--json")
-  .action(async (o: { preset: ExportPreset; out?: string; bundle: boolean; workspace?: string; json?: boolean }) => {
+  .action(async (o: { preset: ExportPreset; out?: string; bundle: boolean; font: boolean; workspace?: string; json?: boolean }) => {
     try {
-      const res = await exportBattle(workspaceOf(o.workspace), { preset: o.preset, out: o.out, bundle: o.bundle, trustedPaths: true });
+      const res = await exportBattle(workspaceOf(o.workspace), { preset: o.preset, out: o.out, bundle: o.bundle, font: o.font, trustedPaths: true });
       if (o.json) return console.log(JSON.stringify({ ...res, files: res.files.length }, null, 2));
       for (const d of res.dirs) console.log(`exported ${d}`);
       console.log(`  ${res.files.length} files · ${res.heroes} heroes · ${res.enemies} enemies · fx ${res.fx.length} · sfx ${res.sfx.length}`);
