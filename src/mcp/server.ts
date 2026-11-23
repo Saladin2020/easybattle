@@ -13,7 +13,7 @@ import path from "node:path";
 import { z } from "zod";
 import { entrySummary } from "../shared/db.js";
 import { Battle, heroStats, rollEncounter, xpToNext } from "../shared/engine.js";
-import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS } from "../shared/types.js";
+import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS } from "../shared/types.js";
 import { bestiaryRaster, EXPORT_PRESETS, exportBattle } from "../lib/export.js";
 import { encodePng } from "../lib/png.js";
 import { renderBattlePng } from "../lib/render.js";
@@ -33,6 +33,7 @@ export const FORMAT_CHEATSHEET = `Document battles/<id>.easybattle.json: { forma
   encounter: { id, name?, regions? (Easy Tilemap overworld region ids), cultures? ${CULTURES.join("|")}, terrains [${TERRAINS.join("|")}], rate (avg steps), groups [{enemies [≤5 ids], weight, levelBonus?}], music?, background?, scripted? (bosses) }
   item:    { item (Easy Items id), hp?, mp?, cures?, target? ally|all_allies }
   rules:   { maxLevel, partySize, xp {base, step, quad}: next(L) = base + step·(L−1) + quad·(L−1)², crit %, flee %, enemyScale %/level, terrainCodes {overworld ground code: terrain} }
+  ui:      { layout? ${UI_LAYOUTS.join("|")} (backview = 16-bit back view: blue message window, enemies on a backdrop, party from behind with HP arcs), status? ${UI_STATUS.join("|")} (cards = Easy Portrait face, Lv, LIFE/POW bars, READY!/WAIT...; backview defaults to cards), backdrop? ${UI_BACKDROPS.join("|")} } — battle screen; classic + rows is the default
 Damage: physical = atk·power/10 − def/2, magic = mag·power/10 − res/2; ×0.9–1.1; crit ×1.5; weak ×1.5; resist ×0.5; defend ×0.5; immune 0.
 Table pick: region id > culture > fallback. Content rules: no sacred figures, scripture or Arabic calligraphy as battle content; martial arts, herbs, firecrackers, kites and animals are fine; keep the cast multicultural.`;
 
@@ -140,8 +141,8 @@ export function createEasyBattleMcp(workspaceRoot: string): McpServer {
 
   server.registerTool(
     "render_battle",
-    { title: "Render battle", description: "PNG image: what bestiary (every enemy) or battle (a battle frame after n auto turns: party, enemies, seed). Returns the image inline; also writes it when out is set (workspace-relative).", inputSchema: { what: z.enum(["bestiary", "battle"]).optional(), party: z.array(z.object({ id: z.string(), level: z.number().int() })).optional(), enemies: z.array(z.string()).optional(), seed: z.number().int().optional(), turns: z.number().int().min(0).max(50).optional(), scale: z.number().int().min(1).max(4).optional() } },
-    async ({ what = "battle", party, enemies, seed = 1, turns = 3, scale = 2 }) => {
+    { title: "Render battle", description: "PNG image: what bestiary (every enemy) or battle (a battle frame after n auto turns: party, enemies, seed). layout classic|backview and status rows|cards|none preview the battle screen (default: the workspace ui setting). Returns the image inline.", inputSchema: { what: z.enum(["bestiary", "battle"]).optional(), party: z.array(z.object({ id: z.string(), level: z.number().int() })).optional(), enemies: z.array(z.string()).optional(), seed: z.number().int().optional(), turns: z.number().int().min(0).max(50).optional(), scale: z.number().int().min(1).max(4).optional(), layout: z.enum(UI_LAYOUTS).optional(), status: z.enum(UI_STATUS).optional(), backdrop: z.enum(UI_BACKDROPS).optional() } },
+    async ({ what = "battle", party, enemies, seed = 1, turns = 3, scale = 2, layout, status, backdrop }) => {
       try {
         const db = await loadDbStrict(root);
         let png: Buffer;
@@ -151,7 +152,7 @@ export function createEasyBattleMcp(workspaceRoot: string): McpServer {
         } else {
           const b = new Battle(db, { party: party ?? db.heroes.slice(0, db.rules.partySize).map((h) => ({ id: h.id, level: 4 })), enemies: (enemies ?? db.enemies.filter((e) => !e.boss).slice(0, 3).map((e) => e.id)).map((id) => ({ id })), seed });
           for (let k = 0; k < turns && !b.over; k++) b.act(b.auto());
-          png = await renderBattlePng(root, db, b, scale);
+          png = await renderBattlePng(root, db, b, scale, { layout, status, backdrop });
         }
         return { content: [{ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }, { type: "text" as const, text: `${what} ${png.length} bytes` }] };
       } catch (e) {
@@ -162,11 +163,11 @@ export function createEasyBattleMcp(workspaceRoot: string): McpServer {
 
   server.registerTool(
     "export_battle",
-    { title: "Export battle", description: "Export: godot (Godot 4.3+ project: Battle autoload, EasyBattleEngine, battle_scene.tscn, enemy strips, Easy Sprite hero sheets, Easy FX / SFX assets, test_battle.gd), pixi (easybattle.json + core + Pixi UI + demo), png (bestiary + enemy strips), json, or all.", inputSchema: { preset: z.enum(EXPORT_PRESETS).optional(), out: z.string().optional().describe("Workspace-relative output folder (single preset)"), bundle: z.boolean().optional() } },
-    async ({ preset, out, bundle }) => {
+    { title: "Export battle", description: "Export: godot (Godot 4.3+ project: Battle autoload, EasyBattleEngine, battle_scene.tscn, enemy strips, Easy Sprite hero sheets, Easy FX / SFX assets, test_battle.gd), pixi (easybattle.json + core + Pixi UI + demo), png (bestiary + enemy strips), json, or all. Both runtimes include the classic and backview layouts, status cards, back-view sheets, Easy Portrait busts and backdrops; font (default true) bundles the มะขาม pixel fonts from Easy Font.", inputSchema: { preset: z.enum(EXPORT_PRESETS).optional(), out: z.string().optional().describe("Workspace-relative output folder (single preset)"), bundle: z.boolean().optional(), font: z.boolean().optional() } },
+    async ({ preset, out, bundle, font }) => {
       try {
-        const res = await exportBattle(root, { preset, out, bundle });
-        return text({ dirs: res.dirs.map((d) => path.relative(root, d) || d), files: res.files.length, fx: res.fx, sfx: res.sfx, warnings: res.warnings });
+        const res = await exportBattle(root, { preset, out, bundle, font });
+        return text({ dirs: res.dirs.map((d) => path.relative(root, d) || d), files: res.files.length, fx: res.fx, sfx: res.sfx, fonts: res.fonts, warnings: res.warnings });
       } catch (e) {
         return err(msg(e));
       }
