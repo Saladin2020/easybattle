@@ -15,9 +15,9 @@ describe("database", () => {
     const r = await base();
     expect(r.errors).toEqual([]);
     expect(r.db.heroes.map((h) => h.id)).toEqual(["ton", "nurul", "mei", "adam"]);
-    expect(r.db.enemies.length).toBe(14);
+    expect(r.db.enemies.length).toBe(17);
     expect(r.db.enemies.filter((e) => e.boss).map((e) => e.id).sort()).toEqual(["highland_tiger", "river_crocodile"]);
-    expect(r.db.encounters.length).toBe(9);
+    expect(r.db.encounters.length).toBe(10);
     const cultures = new Set(r.db.encounters.flatMap((t) => t.cultures ?? []));
     for (const c of ["thai", "malay", "chinese"]) expect(cultures.has(c), c).toBe(true);
     for (const e of r.db.enemies) expect(e.name.th).toMatch(/[\u0E00-\u0E7F]/);

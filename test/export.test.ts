@@ -16,10 +16,25 @@ describe("export", () => {
     const res = await exportBattle(root, { preset: "all", bundle: false });
     const ex = (f: string) => existsSync(path.join(root, "exports", f));
     for (const f of ["easybattle-godot/project.godot", "easybattle-godot/easybattle/battle_engine.gd", "easybattle-godot/easybattle/battle_scene.tscn", "easybattle-godot/easybattle/parity.json", "easybattle-godot/test_battle.gd", "easybattle-godot/easybattle/heroes/nurul.png", "easybattle-pixi/easybattle-core.js", "easybattle-pixi/easybattle-pixi.js", "easybattle-pixi/index.html", "easybattle-png/bestiary.png"]) expect(ex(f), f).toBe(true);
-    expect(res.enemies).toBe(14);
+    expect(res.enemies).toBe(17);
     const proj = readFileSync(path.join(root, "exports/easybattle-godot/project.godot"), "utf8");
     expect(proj).toMatch(/Battle="\*res:\/\/easybattle\/easybattle.gd"/);
     expect(proj).toMatch(/gl_compatibility/);
+  });
+
+  it("ships the back-view assets and the shared screen layout in both runtimes", () => {
+    const ex = (f: string) => existsSync(path.join(root, "exports", f));
+    for (const dir of ["easybattle-godot/easybattle", "easybattle-pixi"]) {
+      for (const f of ["backdrops/backview_paddy.png", "backdrops/backview_forest.png", "heroes/nurul_back.png", "portraits/nurul.png"]) expect(ex(`${dir}/${f}`), `${dir}/${f}`).toBe(true);
+      const data = JSON.parse(readFileSync(path.join(root, "exports", dir, "easybattle.json"), "utf8"));
+      expect(data.ui.layout).toBe("classic");
+      expect(Object.keys(data.ui.layouts)).toContain("backview:cards");
+      expect(data.ui.layouts["backview:cards"]["3"].cards).toHaveLength(3);
+      expect(data.ui.text.ready).toEqual({ th: "พร้อม!", en: "READY!", ms: "SEDIA!" });
+      expect(data.ui.sheetRow).toEqual({ side: 1, back: 2 });
+    }
+    const pixi = readFileSync(path.join(root, "exports/easybattle-pixi/index.html"), "utf8");
+    expect(pixi).toMatch(/layout=backview|"backview"/);
   });
 
   it("refuses paths outside the workspace", async () => {

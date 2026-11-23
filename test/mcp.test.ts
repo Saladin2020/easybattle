@@ -29,7 +29,7 @@ describe("MCP server", () => {
 
   it("info → write (refused, then saved) → check → simulate → roll → render → export", async () => {
     const info = body(await client.callTool({ name: "workspace_info", arguments: {} }));
-    expect(info.enemies.length).toBe(14);
+    expect(info.enemies.length).toBe(17);
     expect(info.format).toMatch(/Content rules/);
 
     const bad = body(await client.callTool({ name: "write_battles", arguments: { id: "game", doc: { format: "easybattle/1", enemies: [{ id: "slug", name: { th: "ทาก", en: "Slug" }, level: 1, stats: { hp: 10, mp: 0, atk: 3, def: 1, mag: 1, res: 1, spd: 2 }, skills: [{ skill: "nope", weight: 1 }], xp: 2, coins: 1, art: "mud" }] } } }));

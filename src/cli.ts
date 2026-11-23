@@ -30,7 +30,7 @@ program.name("easybattle").description("Turn-based JRPG battles (heroes, enemies
 
 program
   .command("init")
-  .description("Create battles/ exports/ with the sample battle system (4 heroes, 14 enemies, 27 skills, 9 encounter tables)")
+  .description("Create battles/ exports/ with the sample battle system (4 heroes, 17 enemies, 27 skills, 10 encounter tables)")
   .option("--force", "Overwrite samples and config")
   .option("--workspace <path>")
   .action(async (o: { force?: boolean; workspace?: string }) => {
