@@ -21,8 +21,8 @@ Client config (stdio):
 | `check_battles` | `items?`, `overworld?` | `{ ok, errors, warnings, cross }`: drops / battle items vs an Easy Items workspace, encounter regions vs an Easy Tilemap overworld map |
 | `simulate_battle` | `party [{id, level}]`, `enemies? [{id, level?}]` or `table?`, `seed?`, `runs?`, `items?` | one auto battle: `result`, `rounds`, `rewards` (xp, coins, drops, level-ups), `snapshot`, `log`; with `runs > 1`: `winRate`, `avgRounds` |
 | `roll_encounter` | `region?`, `culture?`, `terrain?`, `seed?`, `times?` | `{ rolls: [{ seed, table, rate, enemies }] }` |
-| `render_battle` | `what?` (battle · bestiary), `party?`, `enemies?`, `seed?`, `turns?`, `scale?` | PNG image |
-| `export_battle` | `preset?`, `out?`, `bundle?` | written folders, file count, bundled fx / sfx, warnings. `out` must stay inside the workspace |
+| `render_battle` | `what?` (battle · bestiary), `party?`, `enemies?`, `seed?`, `turns?`, `scale?`, `layout?` (classic · backview), `status?` (rows · cards · none), `backdrop?` (auto · paddy · forest) | PNG image (no text); the layout defaults to the workspace `ui`. Back-view enemies use the front-facing art |
+| `export_battle` | `preset?`, `out?`, `bundle?`, `font?` | written folders, file count, bundled fx / sfx, bundled fonts, warnings. `out` must stay inside the workspace |
 
 Errors carry JSON paths (`game.easybattle.json.enemies[0].skills`) so an agent can fix them in place. Document
 ids match `^[a-z0-9][a-z0-9_-]*$`; paths outside the workspace and `EASYBATTLE_ALLOWED_DIRS` are refused.

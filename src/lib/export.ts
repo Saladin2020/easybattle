@@ -6,7 +6,9 @@ import { canon } from "../shared/canon.js";
 import { Battle, groupSeed, PARITY_SETUP, rollGroup, type Action, type BattleSetup } from "../shared/engine.js";
 import { mulberry32 } from "../shared/rng.js";
 import { EXPORT_PRESETS, type BattleDb, type ExportPreset } from "../shared/types.js";
+import { exportLayouts, HERO_FRAMES, PORTRAIT_CROP, resolveUi, SHEET_ROW, UI_TEXT } from "../shared/layout.js";
 import { drawEnemy, enemyStrip } from "./art.js";
+import { BACKDROPS, drawBackdrop } from "./backdrop.js";
 import { FONT_DIR, pkgRoot, resolveInside, RUNTIME_DIR, Writer } from "./fsx.js";
 import { encodePng } from "./png.js";
 import { Raster } from "./raster.js";
@@ -21,6 +23,8 @@ export interface ExportOptions {
   out?: string;
   /** Render the Easy FX effects and Easy SFX sounds skills use into fx/ and sfx/ (default: when the tools are installed). */
   bundle?: boolean;
+  /** Bundle the มะขาม 16 / มะขาม 8 pixel fonts from Easy Font (default: when the tool is installed; else Kanit). */
+  font?: boolean;
   trustedPaths?: boolean;
 }
 
@@ -31,6 +35,8 @@ export interface ExportResult {
   enemies: number;
   fx: string[];
   sfx: string[];
+  /** Easy Font fonts bundled (empty: Kanit fallback). */
+  fonts: string[];
   warnings: string[];
 }
 
@@ -44,12 +50,22 @@ export function fnv1a(s: string): string {
 }
 
 /** Scripted parity cases replayed by test_battle.gd. Actions: null = engine.auto(). */
+type ParityStep = Action | null | { wait: number; menu?: boolean } | { ready: true };
+
 export function parityCases(db: BattleDb) {
   const heroes = db.heroes.map((h) => h.id);
-  const cases: Array<{ name: string; setup: BattleSetup; actions: Array<Action | null> }> = [];
+  // actions: an Action, null (= auto), or for ATB {wait: steps, menu?} (advance time) / {ready: true} (the ready actor acts on auto)
+  const cases: Array<{ name: string; setup: BattleSetup; actions: Array<ParityStep> }> = [];
   if (["ton", "nurul", "mei"].every((h) => heroes.includes(h)) && ["paddy_crab", "giant_mosquito", "monkey_thief"].every((e) => db.enemies.some((x) => x.id === e))) {
     cases.push({ name: "auto_village", setup: PARITY_SETUP, actions: [] });
     cases.push({ name: "scripted_mix", setup: { ...PARITY_SETUP, seed: 77 }, actions: [{ kind: "skill", skill: "teep", target: 4 }, { kind: "item", item: "balm", target: 0 }, null, { kind: "defend" }, null, null, { kind: "skill", skill: "firecracker" }, null, null, null] });
+  }
+  if (heroes.length && db.enemies.length >= 2) {
+    const party = heroes.slice(0, Math.min(3, db.rules.partySize)).map((id) => ({ id, level: 3 }));
+    const enemies = db.enemies.filter((e) => !e.boss).slice(0, 3).map((e) => ({ id: e.id }));
+    const steps: ParityStep[] = [{ wait: 25 }, { ready: true }, { wait: 40, menu: true }, { ready: true }, null, { wait: 7 }, { ready: true }, { ready: true }, null];
+    cases.push({ name: "atb_wait", setup: { party, enemies, seed: 31, items: {}, timing: "atb", atbMode: "wait" }, actions: steps });
+    cases.push({ name: "atb_active", setup: { party, enemies, seed: 32, items: {}, timing: "atb", atbMode: "active" }, actions: steps });
   }
   const boss = db.enemies.find((e) => e.boss);
   if (boss && heroes.length >= 3) cases.push({ name: "boss", setup: { party: heroes.slice(0, 3).map((id) => ({ id, level: boss.level + 1 })), enemies: [{ id: boss.id }], seed: 4242, items: Object.fromEntries(db.items.slice(0, 2).map((i) => [i.item, 2])) }, actions: [] });
@@ -59,7 +75,11 @@ export function parityCases(db: BattleDb) {
     const b = new Battle(db, c.setup);
     for (const a of c.actions) {
       if (b.over) break;
-      b.act(a ?? b.auto());
+      if (a && "wait" in a) b.advance(a.wait, !!a.menu);
+      else if (a && "ready" in a) {
+        const r = b.readyActor();
+        if (r >= 0) b.act(b.auto(r), r);
+      } else b.act(a ?? b.auto());
     }
     b.autoRun();
     return { ...c, snapshot: canon(b.snapshot()), log: fnv1a(canon(b.log)), rewards: canon(b.rewards()) };
@@ -130,16 +150,77 @@ async function heroSheet(root: string, id: string): Promise<Buffer | null> {
   return null;
 }
 
+async function portraitStrip(root: string, id: string): Promise<Buffer | null> {
+  for (const p of [path.join(root, "portraits", `${id}.png`), path.join(pkgRoot, "assets", "portraits", `${id}.png`)]) if (existsSync(p)) return readFile(p);
+  return null;
+}
+
+/** Sheet ids per hero: side view, back view (Easy Sprite top-down sheet) and portrait strip. */
+export function heroArt(h: { id: string; sprite?: string; back?: string; portrait?: string }) {
+  return { side: h.sprite ?? h.id, back: h.back ?? `${h.id}_back`, portrait: h.portrait ?? h.id };
+}
+
+/** Battle screen data shared by both runtimes (layout rectangles, labels, frames). */
+function uiData(db: BattleDb, fonts: string[]) {
+  return { ...resolveUi(db.ui), fonts, layouts: exportLayouts(), text: UI_TEXT, portraitCrop: PORTRAIT_CROP, sheetRow: SHEET_ROW, heroFrames: HERO_FRAMES, backdrops: BACKDROPS.map((b) => `backdrops/backview_${b}.png`) };
+}
+
+/** Copy มะขาม 16 / มะขาม 8 from an Easy Font export (sibling CLI). Returns the font ids bundled. */
+async function bundleFont(w: Writer, res: ExportResult, engine: "godot" | "pixi"): Promise<string[]> {
+  const cli = siblingCli("easyfont");
+  if (!cli) {
+    res.warnings.push("Easy Font not found: battle text uses Kanit instead of the มะขาม pixel fonts (set EASYBATTLE_EASYFONT_CLI)");
+    return [];
+  }
+  const want = ["makham-16", "makham-8"];
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "easybattle-font-"));
+  try {
+    await runSibling(cli, ["init", `--workspace=${tmp}`]);
+    await runSibling(cli, ["export", "--preset", engine, `--workspace=${tmp}`]);
+    const src = path.join(tmp, "exports", `easyfont-${engine}`);
+    const fontDir = engine === "godot" ? path.join(src, "easyfont") : path.join(src, "fonts");
+    const manifest = JSON.parse(await readFile(path.join(fontDir, "fonts.json"), "utf8")) as { default?: string; fonts: Array<{ id: string; fnt: string; png: string }> };
+    const fonts = manifest.fonts.filter((f) => want.includes(f.id));
+    if (fonts.length !== want.length) throw new Error(`Easy Font has ${manifest.fonts.map((f) => f.id).join(", ")}; need ${want.join(", ")}`);
+    const dest = engine === "godot" ? "easyfont/" : "font/fonts/";
+    await w.write(`${dest}fonts.json`, `${JSON.stringify({ ...manifest, default: "makham-16", fonts }, null, 2)}
+`);
+    for (const f of fonts) for (const file of [f.fnt, f.png]) await w.copy(path.join(fontDir, file), `${dest}${file}`);
+    await w.copy(path.join(fontDir, "OFL.txt"), `${dest}OFL.txt`);
+    if (engine === "godot") for (const f of ["easyfont.gd", "thai_shaper.gd"]) await w.copy(path.join(fontDir, f), `easyfont/${f}`);
+    else for (const f of ["easyfont-pixi.js", "easyfont-core.js"]) await w.copy(path.join(src, f), `font/${f}`);
+    return want;
+  } catch (e) {
+    res.warnings.push(`easyfont: ${(e as Error).message.split("\n")[0]}; battle text uses Kanit`);
+    return [];
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+}
+
 async function writeArt(w: Writer, root: string, db: BattleDb, res: ExportResult, sub: string) {
   for (const art of new Set(db.enemies.map((e) => e.art))) {
     const e = db.enemies.find((x) => x.art === art)!;
     const s = enemyStrip(art, e.palette);
     await w.write(`${sub}enemies/${art}.png`, encodePng(s.width, s.height, s.data));
+    const f = enemyStrip(art, e.palette, "front");
+    await w.write(`${sub}enemies/${art}_front.png`, encodePng(f.width, f.height, f.data));
   }
   for (const h of db.heroes) {
-    const png = await heroSheet(root, h.sprite ?? h.id);
-    if (png) await w.write(`${sub}heroes/${h.sprite ?? h.id}.png`, png);
-    else res.warnings.push(`hero ${h.id}: no Easy Sprite side-view sheet (sprites/${h.sprite ?? h.id}.png); the hero is invisible`);
+    const art = heroArt(h);
+    const png = await heroSheet(root, art.side);
+    if (png) await w.write(`${sub}heroes/${art.side}.png`, png);
+    else res.warnings.push(`hero ${h.id}: no Easy Sprite side-view sheet (sprites/${art.side}.png); the hero is invisible`);
+    const back = await heroSheet(root, art.back);
+    if (back) await w.write(`${sub}heroes/${art.back}.png`, back);
+    else res.warnings.push(`hero ${h.id}: no Easy Sprite top-down sheet for the backview layout (sprites/${art.back}.png); the side view is used`);
+    const face = await portraitStrip(root, art.portrait);
+    if (face) await w.write(`${sub}portraits/${art.portrait}.png`, face);
+    else res.warnings.push(`hero ${h.id}: no Easy Portrait strip (portraits/${art.portrait}.png); status cards show the hero colour`);
+  }
+  for (const b of BACKDROPS) {
+    const r = drawBackdrop(b);
+    await w.write(`${sub}backdrops/backview_${b}.png`, encodePng(r.width, r.height, r.data));
   }
 }
 
@@ -149,7 +230,7 @@ export async function exportBattle(root: string, opts: ExportOptions = {}): Prom
   if (!EXPORT_PRESETS.includes(preset)) throw new Error(`Unknown preset ${preset} (${EXPORT_PRESETS.join(", ")})`);
   if (preset === "all" && opts.out) throw new Error("--out needs a single preset (godot, pixi, png or json)");
   const presets: ExportPreset[] = preset === "all" ? ["godot", "pixi", "png", "json"] : [preset];
-  const res: ExportResult = { dirs: [], files: [], heroes: db.heroes.length, enemies: db.enemies.length, fx: [], sfx: [], warnings: [] };
+  const res: ExportResult = { dirs: [], files: [], heroes: db.heroes.length, enemies: db.enemies.length, fx: [], sfx: [], fonts: [], warnings: [] };
   for (const p of presets) {
     const out = opts.out ? (opts.trustedPaths ? path.resolve(root, opts.out) : resolveInside(root, opts.out)) : path.join(dirs(root).exports, `easybattle-${p}`);
     const w = new Writer(out);
@@ -157,8 +238,8 @@ export async function exportBattle(root: string, opts: ExportOptions = {}): Prom
     res.sfx = [];
     if (p === "json") await w.write("easybattle.db.json", `${JSON.stringify(db, null, 2)}\n`);
     if (p === "png") await exportPng(w, db);
-    if (p === "pixi") await exportPixi(w, root, db, res, opts.bundle !== false);
-    if (p === "godot") await exportGodot(w, root, db, res, opts.bundle !== false);
+    if (p === "pixi") await exportPixi(w, root, db, res, opts.bundle !== false, opts.font !== false);
+    if (p === "godot") await exportGodot(w, root, db, res, opts.bundle !== false, opts.font !== false);
     res.dirs.push(out);
     res.files.push(...w.files);
   }
@@ -198,10 +279,11 @@ async function itemNamesFor(root: string, db: BattleDb) {
   return Object.fromEntries([...used].filter((id) => all[id]).sort().map((id) => [id, all[id]!]));
 }
 
-async function exportPixi(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean) {
+async function exportPixi(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean, font: boolean) {
   await writeArt(w, root, db, res, "");
   if (bundle) await bundleAssets(w, db, res);
-  await w.write("easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db) }, null, 2)}\n`);
+  res.fonts = font ? await bundleFont(w, res, "pixi") : [];
+  await w.write("easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db), ui: uiData(db, res.fonts) }, null, 2)}\n`);
   await w.copy(path.join(RUNTIME_DIR, "pixi", "easybattle-core.js"), "easybattle-core.js");
   await w.copy(path.join(RUNTIME_DIR, "pixi", "easybattle-pixi.js"), "easybattle-pixi.js");
   for (const f of ["Kanit-Regular.ttf", "OFL.txt"]) await w.copy(path.join(FONT_DIR, f), `fonts/${f}`);
@@ -212,10 +294,18 @@ Serve this folder over HTTP (fetch needs it):  python3 -m http.server   then ope
   easybattle.json       battle database (heroes, enemies, skills, statuses, encounters, rules)
   easybattle-core.js    the battle engine (same code as the CLI; also runs in Node)
   easybattle-pixi.js    loadBattle(PIXI, "easybattle.json") → { start(app, setup, opts), scripted(table, seed), party(level) }
-  enemies/<art>.png     enemy strips: idle, idle (bob), hurt
+  enemies/<art>.png     enemy strips: idle, idle (bob), hurt — facing left (classic)
+  enemies/<art>_front.png  the same facing the camera (back view)
   heroes/<id>.png       Easy Sprite side-view sheets (left row: idle, attack, hurt, KO, cheer)
+  heroes/<id>_back.png  Easy Sprite top-down sheets (back row) for the back-view layout
+  portraits/<id>.png    Easy Portrait busts for the status cards (neutral, happy, worried, sad)
+  backdrops/            back-view battlefields (paddy, forest)
   fx/ sfx/              Easy FX strips and Easy SFX sounds the skills use (when the tools were installed)
   fonts/                Kanit (SIL OFL 1.1) for Thai text
+  font/                 มะขาม 16 / 8 pixel fonts + Easy Font's Pixi loader (SIL OFL 1.1), when Easy Font is installed
+
+Layouts: index.html?layout=backview&status=cards (or start(app, setup, { layout, status, backdrop })).
+ATB: index.html?timing=atb (&atb=active) or start(app, setup, { timing: "atb", atbMode: "wait" | "active" }).
 `);
 }
 
@@ -239,6 +329,9 @@ function pixiDemo(db: BattleDb): string {
   <div id="bar">
       ${tables}
       <button data-lang="th">ไทย</button><button data-lang="en">EN</button><button data-lang="ms">BM</button>
+      <button data-layout="classic">Classic</button><button data-layout="backview">Backview</button>
+      <button data-status="rows">HP rows</button><button data-status="cards">Cards</button><button data-status="none">No status</button>
+      <button data-timing="turn">Turn</button><button data-timing="atb">ATB</button><button id="atbmode">ATB active</button>
       <button id="auto">Auto</button>
   </div>
   <div id="stage"></div>
@@ -256,18 +349,24 @@ function pixiDemo(db: BattleDb): string {
     const eb = await loadBattle(PIXI, "easybattle.json");
     const q = new URLSearchParams(location.search);
     let lang = q.get("lang") ?? "th", table = q.get("table") ?? ${JSON.stringify(db.encounters[0]?.id ?? "")}, auto = q.has("auto"), ui = null;
+    let layout = q.get("layout") ?? eb.ui?.layout ?? "classic", status = q.get("status") ?? undefined;
+    let timing = q.get("timing") ?? eb.ui?.timing ?? "turn", atbMode = q.get("atb") ?? eb.ui?.atbMode ?? "wait";
     const level = Number(q.get("level") ?? 4), seed = Number(q.get("seed") ?? 7), speed = Number(q.get("speed") ?? 1);
     const start = () => {
       if (ui && !ui.view.destroyed) ui.view.destroy({ children: true });
       const setup = eb.scripted(table, seed);
       setup.party = eb.party(level);
       setup.items = { balm: 2, teh_tarik: 1, kurma: 2 };
-      ui = eb.start(app, setup, { lang, auto, speed, keep: true, onEnd: (r, rw) => { window.__battle.result = r; window.__battle.rewards = rw; } });
+      ui = eb.start(app, setup, { lang, auto, speed, keep: true, layout, status, timing, atbMode, onEnd: (r, rw) => { window.__battle.result = r; window.__battle.rewards = rw; } });
       window.__battle = { eb, ui, result: null, rewards: null };
-      document.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.table === table || b.dataset.lang === lang || (b.id === "auto" && auto)));
+      document.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.table === table || b.dataset.lang === lang || b.dataset.layout === ui.layout || b.dataset.status === ui.status || b.dataset.timing === timing || (b.id === "atbmode" && atbMode === "active") || (b.id === "auto" && auto)));
     };
     document.querySelectorAll("[data-table]").forEach((b) => b.onclick = () => { table = b.dataset.table; start(); });
     document.querySelectorAll("[data-lang]").forEach((b) => b.onclick = () => { lang = b.dataset.lang; start(); });
+    document.querySelectorAll("[data-layout]").forEach((b) => b.onclick = () => { layout = b.dataset.layout; status = undefined; start(); });
+    document.querySelectorAll("[data-status]").forEach((b) => b.onclick = () => { status = b.dataset.status; start(); });
+    document.querySelectorAll("[data-timing]").forEach((b) => b.onclick = () => { timing = b.dataset.timing; start(); });
+    document.getElementById("atbmode").onclick = () => { atbMode = atbMode === "active" ? "wait" : "active"; timing = "atb"; start(); };
     document.getElementById("auto").onclick = () => { auto = !auto; start(); };
     start();
     window.__ready = true;
@@ -278,11 +377,12 @@ function pixiDemo(db: BattleDb): string {
 }
 
 // ---------------------------------------------------------------- Godot
-async function exportGodot(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean) {
+async function exportGodot(w: Writer, root: string, db: BattleDb, res: ExportResult, bundle: boolean, font: boolean) {
   const g = path.join(RUNTIME_DIR, "godot");
   await writeArt(w, root, db, res, "easybattle/");
   if (bundle) await bundleAssets(w, db, res, "easybattle/");
-  await w.write("easybattle/easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db) }, null, 2)}\n`);
+  res.fonts = font ? await bundleFont(w, res, "godot") : [];
+  await w.write("easybattle/easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db), ui: uiData(db, res.fonts) }, null, 2)}\n`);
   await w.write("easybattle/parity.json", `${JSON.stringify({ cases: parityCases(db), encounters: encounterParity(db) }, null, 2)}\n`);
   for (const f of ["easybattle.gd", "battle_engine.gd", "battle_scene.gd", "battle_scene.tscn"]) await w.copy(path.join(g, f), `easybattle/${f}`);
   for (const f of ["Kanit-Regular.ttf", "OFL.txt"]) await w.copy(path.join(FONT_DIR, f), `easybattle/fonts/${f}`);
@@ -310,7 +410,7 @@ config/features=PackedStringArray("4.3")
 [autoload]
 
 Battle="*res://easybattle/easybattle.gd"
-
+${res.fonts.length ? 'EasyFont="*res://easyfont/easyfont.gd"\n' : ""}
 [display]
 
 window/size/viewport_width=480
@@ -334,7 +434,12 @@ Open this folder in Godot 4.3+ and press F5 (pick an encounter), or copy easybat
                                battle_ended(result, rewards), to_dict()/from_dict() for Easy Save
   easybattle/battle_engine.gd  EasyBattleEngine: the deterministic engine (parity-tested with the TypeScript one)
   easybattle/battle_scene.*    the battle UI (uses res://easyui/themes/teak.tres when Easy UI is exported here)
-  easybattle/enemies, heroes   enemy strips and Easy Sprite side-view hero sheets
+  easybattle/enemies, heroes   enemy strips (<art>.png side view, <art>_front.png facing the camera for the back view) and Easy Sprite hero sheets (side view, and <id>_back for the back view)
+  easybattle/portraits         Easy Portrait busts for the status cards
+  easybattle/backdrops         back-view battlefields (paddy, forest)
+  easyfont/                    มะขาม pixel fonts + EasyFont autoload (when Easy Font is installed)
+Layouts: Battle.start(setup, parent, {"layout": "backview", "status": "cards"}) or easybattle.json "ui".
+ATB: Battle.start(setup, parent, {"timing": "atb", "atbMode": "wait"}) (or "active"); main.gd: timing=atb.
   easybattle/fx, sfx           Easy FX strips and Easy SFX sounds the skills use (when bundled)
   test_battle.gd               godot --headless --path . --script res://test_battle.gd   → prints OK
   capture.gd                   frame capture for previews (needs a renderer)

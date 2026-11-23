@@ -12,6 +12,12 @@ var over := ""
 var items: Dictionary = {}
 var no_flee := false
 var _rng_a := 0
+## timing: "turn" (default) or "atb" (active time battle); atb_mode: "wait" or "active". See engine.ts.
+var timing := "turn"
+var atb_mode := "wait"
+var gauge: Array = []
+var steps := 0
+const ATB := {"full": 1000, "base": 10, "start": 300, "roundSteps": 60, "stepsPerSecond": 30, "salt": 0x5eed0a7b}
 var _skills: Dictionary = {}
 var _statuses: Dictionary = {}
 var _enemies: Dictionary = {}
@@ -34,6 +40,8 @@ func _init(database: Dictionary, setup: Dictionary) -> void:
 	for k in setup.get("items", {}):
 		items[k] = int(setup["items"][k])
 	no_flee = bool(setup.get("noFlee", false))
+	timing = "atb" if setup.get("timing", "turn") == "atb" else "turn"
+	atb_mode = "active" if setup.get("atbMode", "wait") == "active" else "wait"
 	var i := 0
 	for p in setup["party"]:
 		var h: Dictionary = _heroes[p["id"]]
@@ -55,7 +63,109 @@ func _init(database: Dictionary, setup: Dictionary) -> void:
 		if e.get("boss", false):
 			no_flee = true
 		i += 1
-	_new_round()
+	if timing == "atb":
+		# start gauges from a second stream so the action rolls keep their order
+		var keep := _rng_a
+		_rng_a = (int(setup["seed"]) ^ int(ATB["salt"])) & 0xFFFFFFFF
+		for _a in actors:
+			gauge.append(int(floor(_rnd() * ATB["start"])))
+		_rng_a = keep
+		round_no = 1
+		log.append({"t": "round", "round": 1})
+	else:
+		_new_round()
+
+
+## ATB: gauge gain per time step.
+func atb_gain(i: int) -> int:
+	return stat(actors[i], "spd") + int(ATB["base"])
+
+
+func _step() -> void:
+	steps += 1
+	if steps % int(ATB["roundSteps"]) == 0:
+		round_no += 1
+		log.append({"t": "round", "round": round_no})
+	var filled: Array = []
+	for i in actors.size():
+		if int(actors[i]["hp"]) <= 0:
+			gauge[i] = 0
+			continue
+		if queue.has(i):
+			continue
+		gauge[i] = int(gauge[i]) + atb_gain(i)
+		if int(gauge[i]) >= int(ATB["full"]):
+			filled.append([i, int(gauge[i]) - int(ATB["full"])])
+			gauge[i] = int(ATB["full"])
+	filled.sort_custom(func(x, y):
+		if x[1] != y[1]:
+			return int(x[1]) > int(y[1])
+		var a: Dictionary = actors[x[0]]
+		var b: Dictionary = actors[y[0]]
+		var sa := stat(a, "spd")
+		var sb := stat(b, "spd")
+		if sa != sb:
+			return sa > sb
+		if a["side"] != b["side"]:
+			return int(a["side"]) < int(b["side"])
+		return int(a["index"]) < int(b["index"]))
+	for f in filled:
+		queue.append(f[0])
+
+
+## ATB: let time run n steps; 0 when over, in turn mode, or in "wait" mode with a menu open.
+func advance(n: int, menu_open: bool = false) -> int:
+	if timing != "atb" or over != "" or (menu_open and atb_mode == "wait"):
+		return 0
+	for _k in n:
+		_step()
+	return n
+
+
+## ATB: actors with a full gauge, in the order they act.
+func ready() -> Array:
+	var r: Array = []
+	for i in queue:
+		if int(actors[i]["hp"]) > 0:
+			r.append(i)
+	return r
+
+
+## ATB: the actor to act now without letting time run (-1 when nobody is ready).
+func ready_actor(who: int = -1) -> int:
+	return _atb_next(who, false)
+
+
+func _atb_next(who: int, run: bool) -> int:
+	var guard := 0
+	while over == "":
+		queue = ready()
+		if who >= 0 and not queue.has(who):
+			return -1
+		if queue.is_empty():
+			if not run or guard > 100000:
+				return -1
+			guard += 1
+			_step()
+			continue
+		var i: int = who if who >= 0 else queue[0]
+		if _start_turn(i):
+			return i
+		if who >= 0:
+			return -1
+	return -1
+
+
+func _start_turn(i: int) -> bool:
+	var a: Dictionary = actors[i]
+	a["defending"] = false
+	for s in a["statuses"]:
+		var k: String = status(s["id"])["kind"]
+		if k == "sleep" or k == "stun":
+			log.append({"t": "skip", "actor": i, "status": s["id"]})
+			_end_turn(i)
+			return false
+	return true
 
 
 # ---------------------------------------------------------------- rng (mulberry32, same as easyitems.gd)
@@ -157,6 +267,8 @@ func _new_round() -> void:
 
 
 func current() -> int:
+	if timing == "atb":
+		return _atb_next(-1, true)
 	while over == "":
 		while queue.size() and int(actors[queue[0]]["hp"]) <= 0:
 			queue.pop_front()
@@ -164,25 +276,15 @@ func current() -> int:
 			_new_round()
 			continue
 		var i: int = queue[0]
-		var a: Dictionary = actors[i]
-		a["defending"] = false
-		var blocker = null
-		for s in a["statuses"]:
-			var k: String = status(s["id"])["kind"]
-			if k == "sleep" or k == "stun":
-				blocker = s
-				break
-		if blocker != null:
-			log.append({"t": "skip", "actor": i, "status": blocker["id"]})
-			_end_turn(i)
+		if not _start_turn(i):
 			continue
 		return i
 	return -1
 
 
-func act(action: Dictionary) -> Array:
+func act(action: Dictionary, who: int = -1) -> Array:
 	var start := log.size()
-	var i := current()
+	var i := _atb_next(who, false) if timing == "atb" and who >= 0 else current()
 	if i < 0:
 		return []
 	var a: Dictionary = actors[i]
@@ -399,7 +501,10 @@ func _flee(i: int) -> void:
 
 
 func _end_turn(i: int) -> void:
-	if queue.size() and queue[0] == i:
+	if timing == "atb":
+		queue.erase(i)
+		gauge[i] = 0
+	elif queue.size() and queue[0] == i:
 		queue.pop_front()
 	var a: Dictionary = actors[i]
 	if int(a["hp"]) <= 0:
@@ -439,8 +544,8 @@ func _check_end() -> void:
 		log.append({"t": "end", "result": "lose"})
 
 
-func auto() -> Dictionary:
-	var i := current()
+func auto(who: int = -1) -> Dictionary:
+	var i := _atb_next(who, false) if timing == "atb" and who >= 0 else current()
 	if i < 0:
 		return {"kind": "defend"}
 	var a: Dictionary = actors[i]
@@ -564,4 +669,11 @@ func snapshot() -> Dictionary:
 		for s in a["statuses"]:
 			st.append("%s:%d" % [s["id"], int(s["turns"])])
 		acts.append({"id": a["id"], "hp": int(a["hp"]), "mp": int(a["mp"]), "st": ",".join(st)})
-	return {"round": round_no, "over": over, "actors": acts, "items": items, "log": log.size()}
+	var snap := {"round": round_no, "over": over, "actors": acts, "items": items, "log": log.size()}
+	if timing == "atb":
+		var g: Array = []
+		for x in gauge:
+			g.append(str(int(x)))
+		snap["steps"] = steps
+		snap["gauge"] = ",".join(g)
+	return snap

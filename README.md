@@ -50,6 +50,50 @@ MCP server; local only, no network.
 |---|---|
 | <img src="docs/assets/godot-battle.png" alt="Godot battle frames" /> | <img src="docs/assets/pixi-boss.png" alt="Pixi boss battle" /> |
 
+### Back-view layout and status cards
+
+<img src="docs/assets/backview.png" alt="Back-view layout with ATB: Godot in Thai (left, front-facing paddy pests, everyone WAIT... over green time bars) and PixiJS in English (right, active mode: a monkey acts while two heroes are READY!)" />
+
+`"ui": { "layout": "backview" }` switches to a 16-bit **back view**: a blue message window on top (message on the
+first row, a 3 × 2 command grid on the other two), enemies **facing the camera** in a row on a paddy-field or
+forest-edge backdrop (front-view art with an idle bob and a white hit flash; the classic view keeps the side art), the
+party seen from behind (Easy Sprite top-down sheets, back row, 2×) with curved HP gauges, and a row of **status
+cards**: Easy Portrait face (worried at low HP, sad when down), Lv badge, LIFE and POW (MP) bars with numbers and
+**READY! / WAIT... / DOWN** from turn order. Cards also work in the classic layout (`"status": "cards"`). Battle text
+uses the มะขาม 16 / มะขาม 8 pixel fonts from Easy Font, labels in Thai, English and Malay
+(ชีวิต / LIFE / NYAWA, พลัง / POW / KUASA, พร้อม! / READY! / SEDIA!, รอ... / WAIT... / TUNGGU...).
+The classic side view stays the default, and older exports (without `ui`) keep working unchanged.
+
+| setting | values |
+|---|---|
+| `layout` | `classic` (side view, default) · `backview` |
+| `status` | `rows` (classic HP / MP panel, default for classic) · `cards` (default for backview) · `none` |
+| `backdrop` | `auto` (forest for forest / mountain / cave terrain, else paddy) · `paddy` · `forest` |
+| `timing` | `turn` (rounds in SPD order, default) · `atb` (active time battle) |
+| `atbMode` | `wait` (time stops while a command menu is open, default) · `active` (time keeps running) |
+
+Set it in any document, override per battle with `Battle.start(setup, parent, {"layout": "backview"})` (Godot) or
+`start(app, setup, { layout: "backview", status: "cards" })` (Pixi), or try `index.html?layout=backview`.
+
+### ATB (active time battle)
+
+`"ui": { "timing": "atb" }` swaps rounds for **time gauges**: every fighter's gauge fills by SPD + 10 per time
+step (30 steps a second at speed 1; a full gauge is 1000). A full gauge reads **READY!** and opens that hero's
+command menu; everyone else reads **WAIT...** over a time bar that fills along the bottom of the status card
+(green while filling, orange-red when full). Enemies act as soon as theirs fill. `"atbMode": "wait"` stops time
+while you choose; `"active"` keeps it running, so an enemy can act in the middle of your choice (your menu comes
+back afterwards). Start gauges are random but seeded (a second mulberry32 stream), and time moves in whole steps,
+so the same seed and the same inputs give the same battle in TypeScript, Pixi and Godot (`parity.json` has
+`atb_wait` and `atb_active` cases). Poison, regen and status turns tick when the fighter acts; a round counter
+advances every 60 steps.
+
+```gdscript
+Battle.start(setup, self, {"layout": "backview", "timing": "atb", "atbMode": "active"})
+```
+```js
+eb.start(app, setup, { layout: "backview", timing: "atb", atbMode: "wait" }); // or index.html?timing=atb&atb=active
+```
+
 ## Starter battles
 
 Three documents that merge into one database, set in the same multicultural southern Thai village as the other
@@ -58,6 +102,7 @@ Easy tools:
 | Document | Contents |
 |---|---|
 | `core.easybattle.json` | rules (max level 30, party of 3, XP curve), 5 elements (ไฟ fire, น้ำ water, ดิน earth, ลม wind, สายฟ้า thunder), 8 statuses (poison, sleep, stun, regen, ATK up, guard, armour break, slow), 27 skills, 6 battle items, 4 heroes |
+| `paddy.easybattle.json` | paddy pests: apple snail (หอยเชอรี่), field rat (หนูนา), restless scarecrow (หุ่นไล่กาซุกซน) and a scripted `paddy_pests` table for the back-view demo |
 | `bestiary.easybattle.json` | 12 field enemies (paddy crab, giant mosquito, snack-thief monkey, water monitor, cobra, cave bat, wild boar, fighting rooster, scorpion, road bandit, mud blob, runaway kite) and 7 encounter tables for Thai, Malay, Chinese-Thai and rural regions |
 | `bosses.easybattle.json` | river-mouth crocodile and highland tiger, with scripted (no-flee) tables |
 
@@ -66,7 +111,7 @@ Heroes are Easy Sprite side-view characters: **ต้น Ton** (Muay Thai: teep,
 (fisher with an oar: water and thunder drum). Battle items and drops are Easy Items ids (balm, teh tarik, kurma,
 Thai tea, ketupat, bubur, banana, mango…).
 
-<p align="center"><img src="docs/assets/bestiary.png" width="88%" alt="14 enemies drawn in code" /></p>
+<p align="center"><img src="docs/assets/bestiary.png" width="88%" alt="17 enemies drawn in code" /></p>
 
 Content rules: no sacred figures, scripture, Quran or Arabic calligraphy as battle content (`check` rejects names
 and descriptions that use them), and places of worship are never battlegrounds or enemies. Martial arts, herbs,
@@ -103,15 +148,16 @@ writes `battles/game.easybattle.json`. Set `EASYBATTLE_WORKSPACE` or pass `--wor
   number of steps between fights; groups are weighted. Scripted tables (bosses) never roll randomly and cannot be fled.
 
 The TypeScript engine, the Pixi runtime (same code, bundled) and the GDScript port share one seeded mulberry32
-sequence. The Godot test replays four scripted battles and 54 encounter rolls and compares canonical JSON with the
-TypeScript results.
+sequence. The Godot test replays four scripted battles and 60 encounter rolls and compares canonical JSON with the
+TypeScript results, then runs the back-view layout in Thai, English and Malay (fits 480 × 270, no overlaps, card
+text inside its cells, READY! / WAIT... / DOWN states).
 
 ## Export
 
 | Preset | What you get |
 |---|---|
-| `godot` | A Godot 4.3+ project: `easybattle/easybattle.gd` autoload **`Battle`** (party, `step(region, culture, ground)` for random encounters, `scripted(table)`, `start(setup, parent, opts)`, rewards into Easy Items' `Items`, `to_dict()` / `from_dict()` for Easy Save), `battle_engine.gd` (`EasyBattleEngine`), `battle_scene.tscn` (command menu, targets, HP / MP bars, damage pop-ups, Easy FX strips, Easy SFX sounds, result panel; Easy UI's `teak.tres` when present), enemy strips, hero sheets, Kanit, `test_battle.gd`, `capture.gd` |
-| `pixi` | `easybattle.json`, `easybattle-core.js` (the engine), `easybattle-pixi.js` (`loadBattle(PIXI, url)` → `start(app, setup, {lang, auto})`, `scripted(table, seed)`, `party(level)`), art, fx/sfx, `index.html` demo (`?table=&level=&seed=&lang=&auto`) |
+| `godot` | A Godot 4.3+ project: `easybattle/easybattle.gd` autoload **`Battle`** (party, `step(region, culture, ground)` for random encounters, `scripted(table)`, `start(setup, parent, opts)`, rewards into Easy Items' `Items`, `to_dict()` / `from_dict()` for Easy Save), `battle_engine.gd` (`EasyBattleEngine`), `battle_scene.tscn` (classic or back-view layout, command menu, targets, HP / MP bars or status cards, damage pop-ups, Easy FX strips, Easy SFX sounds, result panel; Easy UI's `teak.tres` when present), enemy strips, side and back hero sheets, Easy Portrait busts, backdrops, Kanit, the มะขาม fonts with the `EasyFont` autoload, `test_battle.gd`, `capture.gd` |
+| `pixi` | `easybattle.json`, `easybattle-core.js` (the engine), `easybattle-pixi.js` (`loadBattle(PIXI, url)` → `start(app, setup, {lang, auto, layout, status, backdrop})`, `scripted(table, seed)`, `party(level)`), art, portraits, backdrops, fx/sfx, `font/` (มะขาม + Easy Font's Pixi loader), `index.html` demo (`?table=&level=&seed=&lang=&auto&layout=&status=`) |
 | `png` | `bestiary.png`, `enemies/<id>.png` strips (idle, bob, hurt) |
 | `json` | merged `easybattle.db.json` |
 
@@ -124,12 +170,17 @@ if not setup.is_empty():
 ```
 
 Easy FX and Easy SFX assets are rendered into the export when those tools are installed (`--no-bundle` skips it;
-`EASYBATTLE_EASYFX_CLI` / `EASYBATTLE_EASYSFX_CLI` point at a CLI).
+`EASYBATTLE_EASYFX_CLI` / `EASYBATTLE_EASYSFX_CLI` point at a CLI). The มะขาม fonts come from Easy Font the same way
+(`--no-font` skips them and the battle text falls back to Kanit; `EASYBATTLE_EASYFONT_CLI`). Screen rectangles for
+every layout and party size are computed once in `src/shared/layout.ts` and written into `easybattle.json`
+(`ui.layouts`), so both runtimes and the tests use the same numbers. `npx easybattle render --layout backview
+--status cards` previews a frame without text.
 
 ## Web editor
 
 `easybattle serve` (port 8938; `npm run dev` uses Vite on 5193). Tabs: **Party** (heroes with their Easy Sprite
-sheets), **Enemies** (art, stats, weaknesses), **Skills**, **Encounters** (tables and live rolls), **Simulate**
+sheets), **Enemies** (art, stats, weaknesses), **Skills**, **Encounters** (tables and live rolls), **Battle screen** (layout, status bar and backdrop with a live preview;
+saves `ui` into a document), **Simulate**
 (pick a party and enemies, run an auto battle with a readable log, or a 100-seed win rate), **Documents** (edit
 JSON, validate against the whole workspace, save) and **Check**. Export buttons for every preset.
 
@@ -139,7 +190,8 @@ JSON, validate against the whole workspace, save) and **Check**. Export buttons 
 
 `npm run mcp` (stdio) or `npm run mcp:http` (port 8939). Tools: `workspace_info`, `list_entries`, `get_entry`,
 `write_battles` (validates against the whole workspace, `dryRun`), `check_battles`, `simulate_battle` (one fight or a
-win rate), `roll_encounter`, `render_battle` (returns a PNG) and `export_battle`. See [docs/MCP.md](docs/MCP.md).
+win rate), `roll_encounter`, `render_battle` (returns a PNG; `layout` / `status` / `backdrop` preview the battle screen) and
+`export_battle`. See [docs/MCP.md](docs/MCP.md).
 
 ## Ports
 

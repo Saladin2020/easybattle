@@ -1,6 +1,7 @@
 extends Control
 ## Easy Battle demo: pick an encounter table (or a boss) and fight it with the sample party.
-## Command line (after --): table=<id> seed=<n> auto=1 level=<n> lang=th|en|ms speed=<x>
+## Command line (after --): table=<id> seed=<n> auto=1 level=<n> lang=th|en|ms speed=<x> layout=classic|backview status=rows|cards|none
+##   timing=turn|atb atbMode=wait|active
 
 var _list: VBoxContainer
 var _args := {}
@@ -35,13 +36,34 @@ func _menu() -> void:
 	t.text = "Easy Battle · ต่อสู้แบบผลัดตา"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_list.add_child(t)
+	var lay := Button.new()
+	lay.text = "Layout: %s · %s" % [_args.get("layout", "classic"), _args.get("status", "auto")]
+	lay.pressed.connect(func():
+		var order := ["classic", "backview"]
+		_args["layout"] = order[(order.find(_args.get("layout", "classic")) + 1) % 2]
+		_menu())
+	_list.add_child(lay)
+	var tim := Button.new()
+	tim.text = "Timing: %s" % _args.get("timing", "auto")
+	tim.pressed.connect(func():
+		var order := ["auto", "turn", "atb", "atb-active"]
+		_args["timing"] = order[(order.find(_args.get("timing", "auto")) + 1) % 4]
+		_menu())
+	_list.add_child(tim)
+	var sts := Button.new()
+	sts.text = "Status: %s" % _args.get("status", "auto")
+	sts.pressed.connect(func():
+		var order := ["auto", "rows", "cards", "none"]
+		_args["status"] = order[(order.find(_args.get("status", "auto")) + 1) % 4]
+		_menu())
+	_list.add_child(sts)
 	for e in Battle.db["encounters"]:
 		var b := Button.new()
 		var nm: Dictionary = e.get("name", {"th": e["id"]})
 		b.text = ("★ " if e.get("scripted", false) else "") + nm.get(Battle.lang, nm.get("th", e["id"]))
 		b.pressed.connect(_start.bind(e["id"]))
 		_list.add_child(b)
-	_list.get_child(1).grab_focus()
+	_list.get_child(4).grab_focus()
 
 
 func _start(table: String) -> void:
@@ -52,6 +74,14 @@ func _start(table: String) -> void:
 		if t["id"] == table:
 			setup["terrain"] = t["terrains"][0] if t["terrains"][0] != "any" else "grass"
 	var opts := {"auto": _args.has("auto"), "speed": float(_args.get("speed", "1")), "items": {"balm": 2, "teh_tarik": 1, "kurma": 2}, "lang": Battle.lang}
+	if _args.get("layout", "") != "":
+		opts["layout"] = _args["layout"]
+	if _args.get("status", "auto") != "auto":
+		opts["status"] = _args["status"]
+	var tm: String = _args.get("timing", "auto")
+	if tm != "auto":
+		opts["timing"] = "atb" if tm.begins_with("atb") else "turn"
+		opts["atbMode"] = "active" if tm == "atb-active" else _args.get("atbMode", "wait")
 	var scene := Battle.start(setup, self, opts)
 	await Battle.battle_ended
 	if not _args.has("table"):

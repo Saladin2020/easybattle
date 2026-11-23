@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { get, post, type Actor, type SimResult, type Summary } from "./api";
 
-const TABS = ["party", "enemies", "skills", "encounters", "simulate", "documents", "check"] as const;
+const TABS = ["party", "enemies", "skills", "encounters", "screen", "simulate", "documents", "check"] as const;
 type Tab = (typeof TABS)[number];
-const TAB_TH: Record<Tab, string> = { party: "ปาร์ตี้", enemies: "ศัตรู", skills: "สกิล", encounters: "ตารางเจอศัตรู", simulate: "จำลองการต่อสู้", documents: "ไฟล์", check: "ตรวจ" };
+const TAB_TH: Record<Tab, string> = { party: "ปาร์ตี้", enemies: "ศัตรู", skills: "สกิล", encounters: "ตารางเจอศัตรู", screen: "หน้าจอต่อสู้", simulate: "จำลองการต่อสู้", documents: "ไฟล์", check: "ตรวจ" };
 
 function describe(e: Record<string, unknown> & { t: string }, actors: Actor[]): string {
   const n = (i: unknown) => (typeof i === "number" && actors[i] ? actors[i]!.name.en : "?");
@@ -98,6 +98,7 @@ export function App() {
             </table>
           )}
           {tab === "encounters" && <Encounters ws={ws} onPick={setSel} />}
+          {tab === "screen" && <Screen ws={ws} onSaved={() => { reload(); setStatus("saved"); }} />}
           {tab === "simulate" && <Simulate ws={ws} />}
           {tab === "documents" && <Documents ws={ws} onSaved={() => { reload(); setStatus("saved"); }} />}
           {tab === "check" && <Check />}
@@ -145,6 +146,47 @@ function Encounters({ ws, onPick }: { ws: Summary; onPick: (id: string) => void 
         <button className="primary" onClick={roll}>Roll ×8</button>
       </div>
       {rolls.map((r) => <div key={r.seed} className="mono" style={{ fontSize: "0.78rem" }}>seed {r.seed}: {r.table} → {r.enemies.map((e) => `${e.id} Lv${e.level}`).join(", ")}</div>)}
+    </>
+  );
+}
+
+const LAYOUT_TH: Record<string, string> = { classic: "มุมข้าง (classic)", backview: "มุมหลัง (backview)", rows: "แถบ HP (rows)", cards: "การ์ดสถานะ (cards)", none: "ไม่มี (none)", auto: "ตามภูมิประเทศ (auto)", paddy: "ทุ่งนา (paddy)", forest: "ชายป่า (forest)", turn: "ตามรอบ (turn)", atb: "เกจเวลา (ATB)", wait: "หยุดเวลาในเมนู (wait)", active: "เวลาเดินตลอด (active)" };
+
+/** Battle screen settings: layout, status bar, backdrop, with a live preview (no text) and save into a document. */
+type UiKey = "layout" | "status" | "backdrop" | "timing" | "atbMode";
+
+function Screen({ ws, onSaved }: { ws: Summary; onSaved: () => void }) {
+  const [ui, setUi] = useState<Summary["ui"]>(ws.ui ?? { layout: "classic", status: "rows", backdrop: "auto" });
+  const [table, setTable] = useState("");
+  const [doc, setDoc] = useState(ws.docs.includes("core") ? "core" : ws.docs[0] ?? "core");
+  const [msg, setMsg] = useState("");
+  const statuses = ui.layout === "backview" ? ["cards", "none"] : ["rows", "cards", "none"];
+  const set = (k: UiKey, v: string) => {
+    const next = { ...ui, [k]: v };
+    if (k === "layout") next.status = v === "backview" ? "cards" : "rows";
+    setUi(next);
+  };
+  const qs = new URLSearchParams({ ...ui, ...(table ? { table } : {}) }).toString();
+  const sel = (k: UiKey, opts: string[]) => (
+    <label>{k} <select value={ui[k] ?? opts[0]} data-ui={k} onChange={(e) => set(k, e.target.value)}>{opts.map((o) => <option key={o} value={o}>{LAYOUT_TH[o] ?? o}</option>)}</select></label>
+  );
+  return (
+    <>
+      <div className="row">
+        {sel("layout", ["classic", "backview"])}
+        {sel("status", statuses)}
+        {ui.layout === "backview" && sel("backdrop", ["auto", "paddy", "forest"])}
+        {sel("timing", ["turn", "atb"])}
+        {ui.timing === "atb" && sel("atbMode", ["wait", "active"])}
+        <label>table <select value={table} onChange={(e) => setTable(e.target.value)}><option value="">(first 3 enemies)</option>{ws.encounters.map((t) => <option key={t.id} value={t.id}>{t.id}</option>)}</select></label>
+      </div>
+      <img className="screen-preview" alt="battle screen preview" src={`/api/render?${qs}`} width={960} height={540} style={{ imageRendering: "pixelated", maxWidth: "100%", height: "auto" }} />
+      <p className="brand-th">Preview without text. The Godot and Pixi exports draw the same rectangles with มะขาม 16 (th / en / ms labels: ชีวิต / LIFE / NYAWA, พลัง / POW / KUASA, พร้อม! / READY! / SEDIA!, รอ... / WAIT... / TUNGGU...).</p>
+      <div className="row">
+        <label>save into <select value={doc} onChange={(e) => setDoc(e.target.value)}>{ws.docs.map((d) => <option key={d}>{d}</option>)}</select></label>
+        <button className="primary" onClick={() => post<{ ok: boolean; errors: Array<{ message: string }> }>("/api/ui", { doc, ui }).then((r) => { setMsg(r.ok ? `saved ui into ${doc}` : r.errors.map((e) => e.message).join("; ")); if (r.ok) onSaved(); }).catch((e: Error) => setMsg(e.message))}>Save</button>
+        <span className="ok">{msg}</span>
+      </div>
     </>
   );
 }

@@ -24,9 +24,16 @@ describe.skipIf(!GODOT)("Godot export", () => {
     for (let i = 0; i < 2; i++) spawnSync(GODOT!, ["--headless", "--editor", "--quit", "--path", out], { encoding: "utf8", timeout: 240_000 });
     const run = spawnSync(GODOT!, ["--headless", "--path", out, "--script", "res://test_battle.gd"], { encoding: "utf8", timeout: 180_000 });
     expect(run.stdout).not.toMatch(/^FAIL/m);
-    expect(run.stdout).toMatch(/^P\| parity ok cases=4$/m);
-    expect(run.stdout).toMatch(/^E\| tables=9 rolls=54$/m);
+    expect(run.stdout).toMatch(/^P\| parity ok cases=6$/m);
+    expect(run.stdout).toMatch(/^E\| tables=10 rolls=60$/m);
     expect(run.stdout).toMatch(/^S\| scene result=win/m);
+    for (const lang of ["th", "en", "ms"]) {
+      expect(run.stdout).toMatch(new RegExp(`^B\\| backview ${lang} cards=3 enemies=\\d+ states=[a-z,]+ ok$`, "m"));
+      expect(run.stdout).toMatch(new RegExp(`^B\\| backview ${lang} result=(win|lose|fled)$`, "m"));
+    }
+    for (const mode of ["wait", "active"]) expect(run.stdout).toMatch(new RegExp(`^A\\| atb ${mode} steps=\\d+ rounds=\\d+ result=(win|lose|fled) ok$`, "m"));
+    expect(run.stdout).toMatch(/^B\| classic cards result=win ok$/m);
+    expect(run.stdout).toMatch(/^B\| classic none result=win ok$/m);
     expect(run.stdout).toMatch(/^OK$/m);
   }, 900_000);
 });

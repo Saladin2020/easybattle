@@ -1,6 +1,6 @@
 """Headless Chrome check of a PixiJS export: a battle is won with real mouse clicks.
 
-  python3 scripts/check-pixi.py <pixi-export-dir> [screenshot.png]
+  python3 scripts/check-pixi.py <pixi-export-dir> [screenshot.png] [extra query, e.g. layout=backview&status=cards]
 
 Serves the folder on 127.0.0.1:8997, opens the first random table, then plays it by clicking the command menu
 (skill or item once, then Attack) and a target until the battle ends. Then runs the boss table with Auto in Malay.
@@ -10,7 +10,8 @@ import asyncio, json, os, subprocess, sys, time
 from playwright.async_api import async_playwright
 
 DIR = sys.argv[1]
-SHOT = sys.argv[2] if len(sys.argv) > 2 else None
+SHOT = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
+EXTRA = ("&" + sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else ""
 PORT = 8997
 srv = subprocess.Popen([sys.executable, "-m", "http.server", str(PORT), "--bind", "127.0.0.1"], cwd=DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1)
@@ -31,7 +32,7 @@ async def main():
         pg.on("console", lambda m: errs.append(f"{m.type}: {m.text}") if m.type in ("error",) else None)
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.on("response", lambda r: errs.append(f"http {r.status}: {r.url}") if r.status >= 400 and not r.url.endswith("/pixi.min.js") else None)
-        await pg.goto(f"http://127.0.0.1:{PORT}/index.html?table={first}&level=5&speed=4&seed=3")
+        await pg.goto(f"http://127.0.0.1:{PORT}/index.html?table={first}&level=5&speed=4&seed=3{EXTRA}")
         await pg.wait_for_function("window.__ready === true", timeout=40000)
         box = await pg.locator("canvas").bounding_box()
         k = box["width"] / 480
@@ -76,7 +77,7 @@ async def main():
             await pg.locator("canvas").screenshot(path=SHOT.replace(".png", "-result.png"))
         boss_result = None
         if boss:
-            await pg.goto(f"http://127.0.0.1:{PORT}/index.html?table={boss['id']}&level=14&speed=3&auto=1&lang=ms&seed=2")
+            await pg.goto(f"http://127.0.0.1:{PORT}/index.html?table={boss['id']}&level=14&speed=3&auto=1&lang=ms&seed=2{EXTRA}")
             await pg.wait_for_function("window.__ready === true", timeout=40000)
             if SHOT:
                 await pg.wait_for_timeout(900)

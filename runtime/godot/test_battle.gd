@@ -51,7 +51,16 @@ func _init() -> void:
 		for a in case["actions"]:
 			if e.over != "":
 				break
-			e.act(e.auto() if a == null else a)
+			if a == null:
+				e.act(e.auto())
+			elif a.has("wait"):
+				e.advance(int(a["wait"]), bool(a.get("menu", false)))
+			elif a.has("ready"):
+				var r := e.ready_actor()
+				if r >= 0:
+					e.act(e.auto(r), r)
+			else:
+				e.act(a)
 		e.auto_run()
 		var snap := _canon(e.snapshot())
 		var logh := _fnv(_canon(e.log))
@@ -100,5 +109,134 @@ func _init() -> void:
 		print("S| scene result=%s party=%s" % [res[0], _canon(battle.party)])
 		if res[0] != "win":
 			fail = true
+		# back view + status cards in every language: fits 480×270, nothing overlaps, READY!/WAIT.../DOWN states
+		if FileAccess.file_exists("res://easybattle/backdrops/backview_paddy.png"):
+			for lang in ["th", "en", "ms"]:
+				battle.lang = lang
+				battle.reset_party([], 6)
+				var bs: Dictionary = battle.scripted("paddy_pests" if _has_table(db, "paddy_pests") else "plains_fields", 3)
+				var sc = battle.start(bs, root_node, {"speed": 0.0, "layout": "backview", "status": "cards", "lang": lang, "keep": true})
+				for f in 30:
+					await process_frame
+					if sc._state == "command":
+						break
+				var bad := _check_layout(sc.layout_rects(), lang)
+				var st: Array = sc.layout_rects()["states"]
+				if st.count("ready") != 1 or st.count("wait") != st.size() - 1:
+					bad.append("states %s" % [st])
+				var hi: int = sc._turn
+				var keep_hp: int = sc.engine.actors[hi]["hp"]
+				sc.engine.actors[hi]["hp"] = 0
+				sc._refresh()
+				if not "down" in sc.layout_rects()["states"]:
+					bad.append("no DOWN state")
+				sc.engine.actors[hi]["hp"] = keep_hp
+				sc._refresh()
+				print("B| backview %s cards=%d enemies=%d states=%s %s" % [lang, sc._cards.size(), sc.layout_rects()["enemies"].size(), ",".join(st), "ok" if bad.is_empty() else "FAILED " + "; ".join(bad)])
+				if not bad.is_empty():
+					fail = true
+				sc.auto_party = true
+				sc._do(sc.engine.auto())
+				for f in 400:
+					await process_frame
+					if sc._state == "done":
+						break
+				print("B| backview %s result=%s" % [lang, sc._result])
+				if sc._state != "done":
+					fail = true
+				sc.queue_free()
+				await process_frame
+			# ATB: time runs, a full gauge opens the menu, wait mode stops time in menus, active keeps it running
+			for mode in ["wait", "active"]:
+				battle.lang = "th"
+				battle.reset_party([], 6)
+				var sa = battle.start(battle.scripted("paddy_pests" if _has_table(db, "paddy_pests") else "plains_fields", 4), root_node, {"speed": 4.0, "layout": "backview", "status": "cards", "lang": "th", "keep": true, "timing": "atb", "atbMode": mode})
+				var bad3: Array = []
+				var t0 := Time.get_ticks_msec()
+				while sa._state != "command" and Time.get_ticks_msec() - t0 < 20000:
+					await process_frame
+				if sa._state != "command":
+					bad3.append("no command menu")
+				var st3: Array = sa.layout_rects()["states"]
+				if st3.count("ready") < 1:
+					bad3.append("no READY! %s" % [st3])
+				for pair in sa.layout_rects()["time"]:
+					if not pair[1].encloses(pair[0]):
+						bad3.append("time bar outside card")
+				if sa.layout_rects()["time"].size() != sa._cards.size():
+					bad3.append("time bars %d" % sa.layout_rects()["time"].size())
+				bad3.append_array(_check_layout(sa.layout_rects(), "th"))
+				var s0: int = sa.engine.steps
+				var t1 := Time.get_ticks_msec()
+				while Time.get_ticks_msec() - t1 < 600:
+					await process_frame
+				var moved: bool = sa.engine.steps > s0
+				if (mode == "wait") == moved:
+					bad3.append("time %s in a %s-mode menu" % ["ran" if moved else "stopped", mode])
+				sa.auto_party = true
+				if sa._state in ["command", "skills", "items", "target"]:
+					var h := int(sa._pending.get("actor", -1))
+					sa._do(sa.engine.auto(h), h)
+				var t2 := Time.get_ticks_msec()
+				while sa._state != "done" and Time.get_ticks_msec() - t2 < 60000:
+					await process_frame
+				print("A| atb %s steps=%d rounds=%d result=%s %s" % [mode, sa.engine.steps, sa.engine.round_no, sa._result, "ok" if bad3.is_empty() else "FAILED " + "; ".join(bad3)])
+				if sa._state != "done" or not bad3.is_empty():
+					fail = true
+				sa.queue_free()
+				await process_frame
+			# classic + cards and classic + none still build
+			for stv in ["cards", "none"]:
+				battle.lang = "th"
+				battle.reset_party([], 6)
+				var sc2 = battle.start(battle.scripted("plains_fields", 5), root_node, {"speed": 0.0, "auto": true, "status": stv, "keep": true})
+				for f in 400:
+					await process_frame
+					if sc2._state == "done":
+						break
+				var bad2 := _check_layout(sc2.layout_rects(), "th")
+				print("B| classic %s result=%s %s" % [stv, sc2._result, "ok" if bad2.is_empty() else "FAILED " + "; ".join(bad2)])
+				if sc2._state != "done" or not bad2.is_empty():
+					fail = true
+				sc2.queue_free()
+				await process_frame
 	print("FAIL" if fail else "OK")
 	quit(1 if fail else 0)
+
+
+func _has_table(db: Dictionary, id: String) -> bool:
+	for t in db["encounters"]:
+		if t["id"] == id:
+			return true
+	return false
+
+
+func _check_layout(L: Dictionary, lang: String) -> Array:
+	var bad: Array = []
+	var screen := Rect2(0, 0, 480, 270)
+	var all: Array = []
+	if L["window"].size.x > 0:
+		all.append(["window", L["window"]])
+	for k in L["enemies"].size():
+		all.append(["enemy%d" % k, L["enemies"][k]])
+	for k in L["arcs"].size():
+		all.append(["arc%d" % k, L["arcs"][k]])
+	for k in L["cards"].size():
+		all.append(["card%d" % k, L["cards"][k]])
+	for x in all + L["heroes"].map(func(r): return ["hero", r]):
+		if not screen.encloses(x[1]):
+			bad.append("%s off screen %s" % [x[0], x[1]])
+	for i in all.size():
+		for j in range(i + 1, all.size()):
+			if all[i][1].intersects(all[j][1]):
+				bad.append("%s overlaps %s" % [all[i][0], all[j][0]])
+	for e in L["enemies"]:
+		for c in L["cards"]:
+			if e.intersects(c):
+				bad.append("enemy under card")
+	for pair in L["card_text"] + L["menu_text"]:
+		var t: Rect2 = pair[0]
+		var c: Rect2 = pair[1]
+		if t.position.x < c.position.x or t.end.x > c.end.x:
+			bad.append("[%s] text %s wider than %s" % [lang, t, c])
+	return bad

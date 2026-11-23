@@ -8,7 +8,7 @@ import { createApp } from "./server/app.js";
 import { defaultWebRoot } from "./server/base.js";
 import { resolveToken } from "./shared/requestGuard.js";
 import { Battle, heroStats, rollEncounter, xpToNext, type BattleEvent } from "./shared/engine.js";
-import { ENEMY_ART, FORMAT, TERRAINS, type BattleDoc, type Terrain } from "./shared/types.js";
+import { ENEMY_ART, FORMAT, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, type BattleDoc, type Terrain, type UiBackdrop, type UiLayout, type UiStatus } from "./shared/types.js";
 import { bestiaryRaster, EXPORT_PRESETS, exportBattle, type ExportPreset } from "./lib/export.js";
 import { encodePng } from "./lib/png.js";
 import { renderBattlePng } from "./lib/render.js";
@@ -30,7 +30,7 @@ program.name("easybattle").description("Turn-based JRPG battles (heroes, enemies
 
 program
   .command("init")
-  .description("Create battles/ exports/ with the sample battle system (4 heroes, 14 enemies, 27 skills, 9 encounter tables)")
+  .description("Create battles/ exports/ with the sample battle system (4 heroes, 17 enemies, 27 skills, 10 encounter tables)")
   .option("--force", "Overwrite samples and config")
   .option("--workspace <path>")
   .action(async (o: { force?: boolean; workspace?: string }) => {
@@ -277,8 +277,12 @@ program
   .option("--seed <n>", "Seed", "1")
   .option("--turns <n>", "Auto turns before the frame", "3")
   .option("--scale <n>", "Upscale", "2")
+  .option("--layout <l>", "classic | backview (default: the workspace ui setting)")
+  .option("--status <s>", "rows | cards | none")
+  .option("--backdrop <b>", "auto | paddy | forest (backview)")
+  .option("--terrain <t>", "Terrain (picks the backdrop when auto)", "grass")
   .option("--workspace <path>")
-  .action(async (o: { what: string; out: string; party: string; vs: string; seed: string; turns: string; scale: string; workspace?: string }) => {
+  .action(async (o: { what: string; out: string; party: string; vs: string; seed: string; turns: string; scale: string; layout?: UiLayout; status?: UiStatus; backdrop?: UiBackdrop; terrain: string; workspace?: string }) => {
     try {
       const root = workspaceOf(o.workspace);
       const db = await loadDbStrict(root);
@@ -292,7 +296,8 @@ program
         const enemies = (o.vs ? o.vs.split(",") : db.enemies.filter((e) => !e.boss).slice(0, 3).map((e) => e.id)).map((id) => ({ id }));
         const b = new Battle(db, { party, enemies, seed: Number(o.seed) });
         for (let k = 0; k < Number(o.turns) && !b.over; k++) b.act(b.auto());
-        await writeFile(out, await renderBattlePng(root, db, b, Math.max(1, Number(o.scale))));
+        for (const [k, v, ok] of [["layout", o.layout, UI_LAYOUTS], ["status", o.status, UI_STATUS], ["backdrop", o.backdrop, UI_BACKDROPS]] as const) if (v && !(ok as readonly string[]).includes(v)) throw new Error(`--${k} must be ${ok.join(" | ")}`);
+        await writeFile(out, await renderBattlePng(root, db, b, Math.max(1, Number(o.scale)), { layout: o.layout, status: o.status, backdrop: o.backdrop, terrain: o.terrain }));
       }
       console.log(`wrote ${out}`);
     } catch (e) {
@@ -306,11 +311,12 @@ program
   .option("--preset <p>", EXPORT_PRESETS.join(" | "), "all")
   .option("--out <dir>", "Output folder (single preset)")
   .option("--no-bundle", "Do not render Easy FX / Easy SFX assets into the export")
+  .option("--no-font", "Do not bundle the มะขาม pixel fonts from Easy Font (battle text falls back to Kanit)")
   .option("--workspace <path>")
   .option("--json")
-  .action(async (o: { preset: ExportPreset; out?: string; bundle: boolean; workspace?: string; json?: boolean }) => {
+  .action(async (o: { preset: ExportPreset; out?: string; bundle: boolean; font: boolean; workspace?: string; json?: boolean }) => {
     try {
-      const res = await exportBattle(workspaceOf(o.workspace), { preset: o.preset, out: o.out, bundle: o.bundle, trustedPaths: true });
+      const res = await exportBattle(workspaceOf(o.workspace), { preset: o.preset, out: o.out, bundle: o.bundle, font: o.font, trustedPaths: true });
       if (o.json) return console.log(JSON.stringify({ ...res, files: res.files.length }, null, 2));
       for (const d of res.dirs) console.log(`exported ${d}`);
       console.log(`  ${res.files.length} files · ${res.heroes} heroes · ${res.enemies} enemies · fx ${res.fx.length} · sfx ${res.sfx.length}`);

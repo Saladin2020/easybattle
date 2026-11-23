@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildDb, checkDoc, Diags, entrySummary } from "../shared/db.js";
+import { resolveUi } from "../shared/layout.js";
 import { EXPORT_PRESETS, type BattleDb, type BattleDoc, type Diagnostic } from "../shared/types.js";
 import { assertSafeId, pkgRoot, resolveWorkspace, SAMPLES_DIR } from "./fsx.js";
 import { siblingCli } from "./siblings.js";
@@ -214,6 +215,7 @@ export async function workspaceSummary(root: string) {
     skills: r.db.skills.map(entrySummary.skill),
     encounters: r.db.encounters.map((t) => ({ id: t.id, regions: t.regions ?? [], cultures: t.cultures ?? [], terrains: t.terrains, rate: t.rate, groups: t.groups.length, scripted: !!t.scripted })),
     items: r.db.items,
+    ui: resolveUi(r.db.ui),
     errors: r.errors,
     warnings: r.warnings,
     exportPresets: EXPORT_PRESETS,

@@ -6,6 +6,17 @@ extends Control
 ##   await Battle.battle_ended
 ##
 ## Keys: arrows / WASD to move, Enter / Z / Space to choose, Esc / X to go back. Mouse works on every button.
+##
+## Layouts (easybattle.json "ui", or opts {layout, status, backdrop}):
+##   classic  — side view, enemies left, party right (default; old exports without "ui" always use it)
+##   backview — 16-bit back view: blue message window on top, enemies on a paddy/forest backdrop, the party seen
+##              from behind (Easy Sprite back row) with curved HP gauges
+##   status   — "rows" (classic panel), "cards" (Easy Portrait face, Lv, LIFE/POW bars, READY!/WAIT...) or "none"
+##
+## Timing (easybattle.json ui.timing, or opts {timing, atbMode}): "turn" (default) or "atb" — active time battle:
+## gauges fill by SPD, a full gauge reads READY! and opens that hero's menu, the others read WAIT... over a filling
+## time bar on the status card, enemies act when theirs fill. atbMode "wait" (default) stops time while a menu is
+## open, "active" keeps it running. speed 0 skips the real-time wait (tests).
 
 signal finished(result: String, rewards: Dictionary, used_items: Dictionary)
 
@@ -59,13 +70,51 @@ var _menu_panel: PanelContainer
 var _menu: VBoxContainer
 var _result_panel: PanelContainer
 var _sprites: Array = []      # per actor: {node, home, frames}
-var _cursor: Label
+var _cursor  # Label (classic ▼) or Painter (back-view triangle)
 var _audio: AudioStreamPlayer
 var _busy := false
 var _state := "busy"
 var _pending: Dictionary = {}
 var _result := ""
 var _rewards: Dictionary = {}
+# backview / status cards
+var layout := "classic"
+var status := "rows"
+var backdrop := "auto"
+var _ui: Dictionary = {}
+var _L: Dictionary = {}       # screen layout rectangles for this party size (from easybattle.json ui.layouts)
+var _ef                       # EasyFont autoload when present
+var _turn := -1               # hero whose command it is (READY!), -1 = nobody
+var _arcs: Array = []         # {i, p: Painter, hp: Label, box: Rect2}
+var _cards: Array = []        # {i, R, bg, bars, portrait, faces, lv, life, life_v, pow, pow_v, state}
+var _grid: Control
+var _gbuttons: Array = []     # backview grid entries {b, hl, t, disabled, target, cb}
+var _gsel := 0
+
+const BLUE := {"fill": Color("#2a3a9c"), "fill2": Color("#3446b4"), "border": Color("#f2f4ff"), "inner": Color("#8a98e8"), "ink": Color("#0d0906"), "sel": Color("#5a6ef0"), "sel_text": Color("#ffe27a"), "text": Color("#f7f8ff"), "muted": Color("#8a90b8")}
+const TIME := {"empty": Color("#0e1420"), "fill": Color("#23804a"), "full": Color("#b03c1e"), "edge": Color("#0d0906"), "wait_text": Color("#eef2ff")}
+var _atb := false
+var _atb_acc := 0.0
+const CARD := {"fill": Color("#1c2436"), "border": Color("#6a7aa8"), "active": Color("#ffd23a"), "active_fill": Color("#2c3a5c"), "life": Color("#5ad06a"), "life_low": Color("#e8c040"), "life_crit": Color("#e0503a"), "pow": Color("#4aa0f0"), "ready": Color("#ffe27a"), "wait": Color("#a8b0c8"), "down": Color("#e06a5a"), "lv": Color("#0d0906")}
+
+
+## Draws a list of rects / polygons: [Rect2, Color] or [PackedVector2Array, Color]. Used for panels, bars, gauges.
+class Painter extends Control:
+	var cmds: Array = []
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func paint(list: Array) -> void:
+		cmds = list
+		queue_redraw()
+
+	func _draw() -> void:
+		for c in cmds:
+			if c[0] is Rect2:
+				draw_rect(c[0], c[1])
+			else:
+				draw_colored_polygon(c[0], c[1])
 
 
 func _ready() -> void:
@@ -80,11 +129,15 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_build_theme()
 	theme = _theme
+	_resolve_ui(autoload)
 	if not setup.has("party") or setup["party"].is_empty():
 		setup["party"] = [{"id": _db["heroes"][0]["id"], "level": 3}, {"id": _db["heroes"][1]["id"], "level": 3}, {"id": _db["heroes"][2]["id"], "level": 3}]
 	if not setup.has("seed"):
 		setup["seed"] = 1
+	setup["timing"] = String(opts.get("timing", setup.get("timing", _ui.get("timing", "turn"))))
+	setup["atbMode"] = String(opts.get("atbMode", setup.get("atbMode", _ui.get("atbMode", "wait"))))
 	engine = EasyBattleEngine.new(_db, setup)
+	_atb = engine.timing == "atb"
 	_build_ui()
 	var names: Array = []
 	for a in engine.actors:
@@ -102,11 +155,114 @@ func _load_db() -> Dictionary:
 	var f := FileAccess.open("res://easybattle/easybattle.json", FileAccess.READ)
 	var data = JSON.parse_string(f.get_as_text())
 	_item_names = data.get("itemNames", {})
+	_ui = data.get("ui", {})
 	return data["db"] if data.has("db") else data
 
 
 func _t(key: String) -> String:
+	if not TEXT.has(key):
+		var u: Dictionary = _ui.get("text", {}).get(key, {})
+		return u.get(lang, u.get("en", key))
 	return TEXT[key].get(lang, TEXT[key]["en"])
+
+
+func _resolve_ui(autoload: Node) -> void:
+	if autoload and "ui" in autoload and autoload.ui is Dictionary and autoload.ui.size():
+		_ui = autoload.ui
+	layout = String(opts.get("layout", _ui.get("layout", "classic")))
+	status = String(opts.get("status", _ui.get("status", "")))
+	backdrop = String(opts.get("backdrop", _ui.get("backdrop", "auto")))
+	if not layout in ["classic", "backview"]:
+		layout = "classic"
+	if status == "" or not status in ["rows", "cards", "none"]:
+		status = "cards" if layout == "backview" else "rows"
+	if layout == "backview" and status == "rows":
+		status = "cards"
+	var n := 0
+	for p in setup.get("party", []):
+		n += 1
+	if n == 0:
+		n = 3
+	var key := "%s:%s" % [layout, status]
+	var layouts: Dictionary = _ui.get("layouts", {})
+	if layouts.has(key):
+		_L = layouts[key].get(str(clampi(n, 1, 4)), {})
+	if _L.is_empty():
+		# old export without ui data: classic look, as before
+		layout = "classic"
+		status = "rows" if status != "none" else "none"
+	_ef = get_node_or_null("/root/EasyFont")
+
+
+func _has_pixel_font() -> bool:
+	return _ef != null and _ef.fonts.has("makham-16")
+
+
+func _shape(text: String) -> String:
+	return _ef.shape(text) if _ef else text
+
+
+## A Label in an Easy Font pixel font (makham-16 / makham-8) with its cell top at the label position.
+## Falls back to the theme font when Easy Font is not in the project.
+func _ptext(text: String, id: String, col: Color) -> Label:
+	var l := Label.new()
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	l.add_theme_constant_override("line_spacing", 0)
+	l.add_theme_color_override("font_color", col)
+	if _ef and _ef.fonts.has(id):
+		l.add_theme_font_override("font", _ef.font(id))
+		l.add_theme_font_size_override("font_size", _ef.size_of(id))
+		l.set_meta("pixel", id)
+	else:
+		l.add_theme_font_size_override("font_size", 10 if id == "makham-16" else 8)
+	_set_text(l, text)
+	return l
+
+
+func _set_text(l: Label, text: String) -> void:
+	l.text = _shape(text) if l.has_meta("pixel") else text
+	l.size = l.get_minimum_size()
+
+
+func _text_w(l: Label) -> int:
+	return int(l.get_minimum_size().x)
+
+
+func _place(l: Control, x: float, y: float) -> void:
+	l.position = Vector2(roundf(x), roundf(y + (0.0 if l.has_meta("pixel") else 4.0)))
+
+
+func _rect(d) -> Rect2:
+	return Rect2(float(d["x"]), float(d["y"]), float(d["w"]), float(d["h"]))
+
+
+func _blue_panel(r: Rect2) -> Painter:
+	var p := Painter.new()
+	p.position = r.position
+	p.size = r.size
+	var w := r.size.x
+	var h := r.size.y
+	p.paint([[Rect2(0, 0, w, h), BLUE["ink"]], [Rect2(1, 1, w - 2, h - 2), BLUE["border"]], [Rect2(3, 3, w - 6, h - 6), BLUE["inner"]], [Rect2(4, 4, w - 8, h - 8), BLUE["fill"]], [Rect2(4, 4, w - 8, floorf((h - 8) / 2.0)), BLUE["fill2"]]])
+	return p
+
+
+## Enemy placement for the back view: one row centred on the field, feet on the horizon line (same formula as
+## backviewEnemyRects in the TS/JS runtimes).
+static func backview_enemy_rects(sizes: Array, base: Dictionary) -> Array:
+	var total := 0
+	for e in sizes:
+		total += int(e["w"])
+	var gap := maxi(4, mini(36, int(floor(float(456 - total) / float(maxi(1, sizes.size() + 1))))))
+	var span := total + gap * (sizes.size() - 1)
+	var x := int(round(240.0 - span / 2.0))
+	var out: Array = []
+	for k in sizes.size():
+		var e: Dictionary = sizes[k]
+		var feet := int(base["boss"]) if e.get("boss", false) else int(base["normal"]) - (k % 2) * 4
+		out.append(Rect2(x, feet - int(e["h"]), int(e["w"]), int(e["h"])))
+		x += int(e["w"]) + gap
+	return out
 
 
 func _name(a: Dictionary) -> String:
@@ -179,6 +335,9 @@ func _terrain_colors() -> Array:
 
 
 func _build_ui() -> void:
+	if layout == "backview":
+		_build_backview()
+		return
 	_bg = Control.new()
 	_bg.size = Vector2(W, H)
 	add_child(_bg)
@@ -237,6 +396,7 @@ func _build_ui() -> void:
 	_msg_panel.add_child(_msg)
 	add_child(_msg_panel)
 	_party_panel = PanelContainer.new()
+	_party_panel.visible = status == "rows"
 	_party_panel.position = Vector2(176, 196)
 	_party_panel.custom_minimum_size = Vector2(296, 68)
 	var rows := VBoxContainer.new()
@@ -276,8 +436,9 @@ func _build_ui() -> void:
 		_party_rows.append({"actor": engine.actors.find(a), "name": nm, "hp": hp, "hpl": hpl, "mp": mp, "mpl": mpl})
 	add_child(_party_panel)
 	_menu_panel = PanelContainer.new()
-	_menu_panel.position = Vector2(8, 196)
-	_menu_panel.custom_minimum_size = Vector2(162, 68)
+	var m := _rect(_L["menu"]) if _L.has("menu") else Rect2(8, 196, 162, 68)
+	_menu_panel.position = m.position
+	_menu_panel.custom_minimum_size = m.size
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(154, 60)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -293,9 +454,350 @@ func _build_ui() -> void:
 	_cursor.add_theme_color_override("font_color", Color("#ffd27a"))
 	_cursor.visible = false
 	add_child(_cursor)
+	if status == "cards":
+		_build_cards()
 	_audio = AudioStreamPlayer.new()
 	add_child(_audio)
 	_refresh()
+
+
+# ---------------------------------------------------------------- backview
+func _build_backview() -> void:
+	var L := _L
+	_bg = Control.new()
+	_bg.size = Vector2(W, H)
+	add_child(_bg)
+	var terrain: String = setup.get("terrain", "grass")
+	var bd := backdrop if backdrop != "auto" else ("forest" if terrain in ["forest", "mountain", "cave"] else "paddy")
+	var bdp := "res://easybattle/backdrops/backview_%s.png" % bd
+	if ResourceLoader.exists(bdp):
+		var tr := TextureRect.new()
+		tr.name = "Backdrop"
+		tr.texture = load(bdp)
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_bg.add_child(tr)
+	else:
+		var p := Painter.new()
+		p.paint([[_rect(L["field"]), Color("#79c48a")], [_rect(L["strip"]), Color("#1a120c")]])
+		_bg.add_child(p)
+	var shadows := Painter.new()
+	_bg.add_child(shadows)
+	_actors_layer = Control.new()
+	_actors_layer.size = Vector2(W, H)
+	_actors_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_actors_layer)
+	var hero_layer := Control.new()
+	hero_layer.size = Vector2(W, H)
+	hero_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hero_layer)
+	var enemies: Array = []
+	var heroes: Array = []
+	for i in engine.actors.size():
+		if int(engine.actors[i]["side"]) == 1:
+			enemies.append(i)
+		else:
+			heroes.append(i)
+	_sprites.resize(engine.actors.size())
+	var defs: Array = []
+	var sizes: Array = []
+	for i in enemies:
+		var e: Dictionary = {}
+		for x in _db["enemies"]:
+			if x["id"] == engine.actors[i]["id"]:
+				e = x
+		defs.append(e)
+		var boss: bool = e.get("boss", false)
+		sizes.append({"w": 80 if boss else 48, "h": 64 if boss else 48, "boss": boss})
+	var rects := backview_enemy_rects(sizes, L["enemyBase"])
+	var sh: Array = []
+	for k in enemies.size():
+		var i: int = enemies[k]
+		var r: Rect2 = rects[k]
+		var e: Dictionary = defs[k]
+		# facing the camera; older exports without front strips use the side art
+		var path := "res://easybattle/enemies/%s_front.png" % e.get("art", "")
+		if not ResourceLoader.exists(path):
+			path = "res://easybattle/enemies/%s.png" % e.get("art", "")
+		var at := AtlasTexture.new()
+		if ResourceLoader.exists(path):
+			at.atlas = load(path)
+		at.region = Rect2(0, 0, r.size.x, r.size.y)
+		var spr := TextureRect.new()
+		spr.name = "Enemy%d" % i
+		spr.texture = at
+		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		spr.position = r.position
+		spr.size = r.size
+		_actors_layer.add_child(spr)
+		_sprites[i] = {"node": spr, "home": spr.position, "atlas": at, "w": int(r.size.x), "h": int(r.size.y), "enemy": true}
+		var cx := r.position.x + r.size.x / 2.0
+		var fy := r.position.y + r.size.y - 2
+		var hw := r.size.x / 2.0 - 6
+		sh.append([PackedVector2Array([Vector2(cx - hw, fy), Vector2(cx - hw * 0.7, fy - 2), Vector2(cx + hw * 0.7, fy - 2), Vector2(cx + hw, fy), Vector2(cx + hw * 0.7, fy + 2), Vector2(cx - hw * 0.7, fy + 2)]), Color(0, 0, 0, 0.28)])
+	shadows.paint(sh)
+	var row: Dictionary = _ui.get("sheetRow", {"side": 1, "back": 2})
+	var scale := float(L.get("heroScale", 2))
+	for k in heroes.size():
+		var i: int = heroes[k]
+		var a: Dictionary = engine.actors[i]
+		var slot: Dictionary = L["slots"][k]
+		var h: Dictionary = {}
+		for x in _db["heroes"]:
+			if x["id"] == a["id"]:
+				h = x
+		var back := "res://easybattle/heroes/%s.png" % h.get("back", "%s_back" % h.get("id", ""))
+		var side := "res://easybattle/heroes/%s.png" % h.get("sprite", h.get("id", ""))
+		var use_back := ResourceLoader.exists(back)
+		var at := AtlasTexture.new()
+		if use_back:
+			at.atlas = load(back)
+		elif ResourceLoader.exists(side):
+			at.atlas = load(side)
+		var y0 := int(row["back"] if use_back else row["side"]) * 48
+		at.region = Rect2(0, y0, 48, 48)
+		var spr := TextureRect.new()
+		spr.name = "Hero%d" % i
+		spr.texture = at
+		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var sr := _rect(slot["sprite"])
+		spr.position = sr.position
+		spr.scale = Vector2(scale, scale)
+		hero_layer.add_child(spr)
+		_sprites[i] = {"node": spr, "home": spr.position, "atlas": at, "w": int(sr.size.x), "h": int(sr.size.y), "enemy": false, "row": y0}
+		var arc := Painter.new()
+		arc.name = "Arc%d" % i
+		add_child(arc)
+		var hp := _ptext(_t("hp"), "makham-8", Color.WHITE)
+		hp.name = "ArcLabel%d" % i
+		var hl := _rect(slot["hpLabel"])
+		_place(hp, hl.position.x, hl.position.y)
+		add_child(hp)
+		_arcs.append({"i": i, "p": arc, "hp": hp, "box": _rect(slot["arc"])})
+	_msg_panel = null
+	var win := _blue_panel(_rect(L["window"]))
+	win.name = "Window"
+	add_child(win)
+	var tr0 := _rect(L["textRows"][0])
+	_msg = _ptext("", "makham-16", BLUE["text"])
+	_msg.name = "Message"
+	_place(_msg, tr0.position.x, tr0.position.y)
+	add_child(_msg)
+	_grid = Control.new()
+	_grid.name = "Menu"
+	_grid.position = _rect(L["menu"]).position
+	_grid.size = _rect(L["menu"]).size
+	_grid.visible = false
+	add_child(_grid)
+	# classic code paths hide/show _menu_panel; in the back view it is the grid
+	_menu_panel = PanelContainer.new()
+	_menu_panel.visible = false
+	_menu = VBoxContainer.new()
+	if status == "cards":
+		_build_cards()
+	_fx_layer = Control.new()
+	_fx_layer.size = Vector2(W, H)
+	_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_fx_layer)
+	var cur := Painter.new()
+	cur.paint([[PackedVector2Array([Vector2(-1, -1), Vector2(10, -1), Vector2(4.5, 6)]), BLUE["ink"]], [PackedVector2Array([Vector2(0, 0), Vector2(9, 0), Vector2(4.5, 5)]), Color("#ffe27a")]])
+	cur.visible = false
+	add_child(cur)
+	_cursor = cur
+	_audio = AudioStreamPlayer.new()
+	add_child(_audio)
+	_refresh()
+
+
+func _draw_arc(a: Dictionary) -> void:
+	var actor: Dictionary = engine.actors[a["i"]]
+	var box: Rect2 = a["box"]
+	var n := 16
+	var hp := int(actor["hp"])
+	var mx := maxi(1, int(actor["max"]["hp"]))
+	var filled := 0 if hp <= 0 else maxi(1, int(ceil(float(n * hp) / mx)))
+	var ratio := float(hp) / mx
+	var col: Color = CARD["life"] if ratio > 0.5 else (CARD["life_low"] if ratio > 0.25 else CARD["life_crit"])
+	var cx := box.position.x + box.size.x
+	var cy := box.position.y + box.size.y
+	var pts: Array = []
+	for k in n:
+		var ang := PI + (k + 0.5) * (PI / 2.0 / n)
+		pts.append(Vector2(roundf(cx + cos(ang) * (box.size.x - 3)) - 2, roundf(cy + sin(ang) * (box.size.y - 3)) - 2))
+	var cmds: Array = []
+	for p in pts:
+		cmds.append([Rect2(p - Vector2(1, 1), Vector2(6, 6)), BLUE["ink"]])
+	for k in n:
+		cmds.append([Rect2(pts[k], Vector2(4, 4)), col if k < filled else Color("#3a3020")])
+	for k in filled:
+		cmds.append([Rect2(pts[k], Vector2(4, 1)), Color("#d8ffd0")])
+	a["p"].paint(cmds)
+	a["hp"].modulate.a = 1.0 if hp > 0 else 0.5
+
+
+# ---------------------------------------------------------------- status cards
+func _build_cards() -> void:
+	var crop: Dictionary = _ui.get("portraitCrop", {"x": 12, "y": 4, "w": 40, "h": 40})
+	var k := 0
+	for i in engine.actors.size():
+		var a: Dictionary = engine.actors[i]
+		if int(a["side"]) != 0:
+			continue
+		var R: Dictionary = _L["cards"][k]
+		k += 1
+		var c := Control.new()
+		c.name = "Card%d" % i
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(c)
+		var bg := Painter.new()
+		c.add_child(bg)
+		var pr := _rect(R["portrait"])
+		var faces: Array = []
+		var fp := "res://easybattle/portraits/%s.png" % a["id"]
+		var portrait: Control
+		if ResourceLoader.exists(fp):
+			var tex: Texture2D = load(fp)
+			for f in 4:
+				var at := AtlasTexture.new()
+				at.atlas = tex
+				at.region = Rect2(f * 64 + int(crop["x"]), int(crop["y"]), int(crop["w"]), int(crop["h"]))
+				faces.append(at)
+			var t := TextureRect.new()
+			t.texture = faces[0]
+			t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			portrait = t
+		else:
+			var col := Color("#f4ae3d")
+			for h in _db["heroes"]:
+				if h["id"] == a["id"]:
+					col = Color(h.get("color", "#f4ae3d"))
+			var p := Painter.new()
+			p.paint([[Rect2(Vector2.ZERO, pr.size), col]])
+			portrait = p
+		portrait.name = "Portrait"
+		portrait.position = pr.position
+		portrait.size = pr.size
+		c.add_child(portrait)
+		var bars := Painter.new()
+		c.add_child(bars)
+		var time := Painter.new()
+		time.name = "Time"
+		c.add_child(time)
+		var lvr := _rect(R["lv"])
+		var lvbg := Painter.new()
+		lvbg.paint([[lvr, CARD["border"]], [lvr.grow(-1), CARD["lv"]]])
+		c.add_child(lvbg)
+		var compact: bool = R.get("compact", false)
+		var e := {"i": i, "R": R, "c": c, "bg": bg, "bars": bars, "time": time, "portrait": portrait, "faces": faces,
+			"lv": _ptext("", "makham-8", Color.WHITE),
+			"life": _ptext("" if compact else _t("life"), "makham-16", Color("#d8f0d8")),
+			"life_v": _ptext("", "makham-16", Color.WHITE),
+			"pow": _ptext("" if compact else _t("pow"), "makham-16", Color("#d0e4ff")),
+			"pow_v": _ptext("", "makham-16", Color.WHITE),
+			"state": _ptext("", "makham-16", CARD["wait"])}
+		for key in ["lv", "life", "life_v", "pow", "pow_v", "state"]:
+			e[key].name = key.capitalize().replace(" ", "")
+			c.add_child(e[key])
+		_cards.append(e)
+
+
+func card_state(i: int) -> String:
+	if int(engine.actors[i]["hp"]) <= 0:
+		return "down"
+	if _atb:
+		return "ready" if engine.ready().has(i) else "wait"
+	return "ready" if i == _turn else "wait"
+
+
+## ATB time bars: a stripe behind READY! / WAIT... that fills with the gauge (green), full = orange.
+func _draw_time_bars() -> void:
+	if not _atb:
+		return
+	for e in _cards:
+		var r := _rect(e["R"]["time"]) if e["R"].has("time") else Rect2()
+		if r.size.x <= 0:
+			continue
+		var a: Dictionary = engine.actors[e["i"]]
+		var v := minf(1.0, float(engine.gauge[e["i"]]) / float(EasyBattleEngine.ATB["full"])) if int(a["hp"]) > 0 else 0.0
+		var cmds: Array = [[r.grow(1), TIME["edge"]], [r, TIME["empty"]]]
+		if v > 0.0:
+			cmds.append([Rect2(r.position, Vector2(maxf(1.0, roundf(r.size.x * v)), r.size.y)), TIME["full"] if v >= 1.0 else TIME["fill"]])
+		e["time"].paint(cmds)
+
+
+func _refresh_cards() -> void:
+	for e in _cards:
+		var R: Dictionary = e["R"]
+		var a: Dictionary = engine.actors[e["i"]]
+		var st := card_state(e["i"])
+		var active: bool = (e["i"] == _turn) if _atb else st == "ready"
+		var r := _rect(R["rect"])
+		var pr := _rect(R["portrait"])
+		e["bg"].paint([[r, CARD["lv"]], [r.grow(-1), CARD["active"] if active else CARD["border"]], [r.grow(-2), CARD["active_fill"] if active else CARD["fill"]], [pr.grow(1), CARD["lv"]]])
+		var hp := int(a["hp"])
+		var ratio := float(hp) / maxf(1.0, float(a["max"]["hp"]))
+		if e["faces"].size() == 4:
+			e["portrait"].texture = e["faces"][3 if hp <= 0 else (1 if _result == "win" else (2 if ratio <= 0.3 else 0))]
+		e["portrait"].modulate.a = 1.0 if hp > 0 else 0.55
+		_set_text(e["lv"], "%s%d" % [_t("lv"), int(a["level"])])
+		var lvr := _rect(R["lv"])
+		_place(e["lv"], lvr.position.x + 2, lvr.position.y - 4)
+		var ll := _rect(R["lifeLabel"])
+		var pl := _rect(R["powLabel"])
+		_place(e["life"], ll.position.x, ll.position.y)
+		_place(e["pow"], pl.position.x, pl.position.y)
+		_set_text(e["life_v"], "%d/%d" % [hp, int(a["max"]["hp"])])
+		_set_text(e["pow_v"], "%d/%d" % [int(a["mp"]), int(a["max"]["mp"])])
+		_place(e["life_v"], ll.end.x - _text_w(e["life_v"]), ll.position.y)
+		_place(e["pow_v"], pl.end.x - _text_w(e["pow_v"]), pl.position.y)
+		var lc: Color = CARD["life"] if ratio > 0.5 else (CARD["life_low"] if ratio > 0.25 else CARD["life_crit"])
+		var cmds: Array = []
+		for b in [[_rect(R["lifeBar"]), maxf(0.0, ratio), lc], [_rect(R["powBar"]), float(a["mp"]) / maxf(1.0, float(a["max"]["mp"])) if int(a["max"]["mp"]) > 0 else 0.0, CARD["pow"]]]:
+			var br: Rect2 = b[0]
+			cmds.append([br.grow(1), CARD["lv"]])
+			cmds.append([br, Color("#2a2a3a")])
+			cmds.append([Rect2(br.position, Vector2(roundf(br.size.x * b[1]), br.size.y)), b[2]])
+		e["bars"].paint(cmds)
+		_set_text(e["state"], _t(st))
+		e["state"].add_theme_color_override("font_color", CARD["ready"] if st == "ready" else (CARD["down"] if st == "down" else (TIME["wait_text"] if _atb else CARD["wait"])))
+		if _atb:
+			# 1 px drop shadow keeps the label readable on the time bar
+			e["state"].add_theme_color_override("font_shadow_color", TIME["edge"])
+			e["state"].add_theme_constant_override("shadow_offset_x", 1)
+			e["state"].add_theme_constant_override("shadow_offset_y", 1)
+		var sr := _rect(R["state"])
+		_place(e["state"], sr.position.x + roundf((sr.size.x - _text_w(e["state"])) / 2.0), sr.position.y)
+	_draw_time_bars()
+
+
+## Where everything ended up on screen, for tests and tools:
+## {window, enemies: [Rect2], heroes: [Rect2], arcs: [Rect2], cards: [Rect2], card_text: [[Rect2 label, Rect2 card]],
+##  menu_text: [[Rect2 label, Rect2 cell]], states: [String]}
+func layout_rects() -> Dictionary:
+	var out := {"window": Rect2(), "enemies": [], "heroes": [], "arcs": [], "cards": [], "card_text": [], "menu_text": [], "states": [], "time": []}
+	if _L.has("window"):
+		out["window"] = _rect(_L["window"])
+	for s in _sprites:
+		if s:
+			var r := Rect2(s["home"], Vector2(s["w"], s["h"]))
+			out["enemies" if s["enemy"] else "heroes"].append(r)
+	for a in _arcs:
+		out["arcs"].append(a["box"])
+	for e in _cards:
+		var cr := _rect(e["R"]["rect"])
+		out["cards"].append(cr)
+		for key in ["lv", "life", "life_v", "pow", "pow_v", "state"]:
+			var l: Label = e[key]
+			if l.text != "":
+				out["card_text"].append([Rect2(l.position, l.get_minimum_size()), cr])
+		out["states"].append(card_state(e["i"]))
+		if _atb and e["R"].has("time"):
+			out["time"].append([_rect(e["R"]["time"]), cr])
+	for g in _gbuttons:
+		var b: Button = g["b"]
+		if b.visible:
+			var t: Label = g["t"]
+			out["menu_text"].append([Rect2(_grid.position + b.position + t.position, t.get_minimum_size()), Rect2(_grid.position + b.position, b.size)])
+	return out
 
 
 func _bar_style(bar: ProgressBar, col: Color) -> void:
@@ -369,16 +871,34 @@ func _place_actors() -> void:
 func _hero_frame(i: int, frame: int) -> void:
 	var s: Dictionary = _sprites[i]
 	if s and not s["enemy"]:
-		s["atlas"].region = Rect2(frame * 48, 48, 48, 48)
+		s["atlas"].region = Rect2(frame * 48, int(s.get("row", 48)), 48, 48)
 
 
 func _enemy_frame(i: int, frame: int) -> void:
 	var s: Dictionary = _sprites[i]
 	if s and s["enemy"]:
+		s["hit"] = frame == 2
 		s["atlas"].region = Rect2(frame * s["w"], 0, s["w"], s["h"])
 
 
+var _ms := 0.0
+
+
+func _process(delta: float) -> void:
+	_ms += delta * 1000.0
+	# back view: enemies breathe (idle bob, frames 0/1), staggered so a group does not move in lockstep
+	if layout == "backview":
+		for i in _sprites.size():
+			var s = _sprites[i]
+			if s and s["enemy"] and not s.get("hit", false):
+				s["atlas"].region = Rect2((int(floor(_ms / 420.0 + i * 0.5)) % 2) * s["w"], 0, s["w"], s["h"])
+	_atb_process(delta)
+
+
 func _refresh() -> void:
+	for a in _arcs:
+		_draw_arc(a)
+	_refresh_cards()
 	for r in _party_rows:
 		var a: Dictionary = engine.actors[r["actor"]]
 		r["hp"].value = int(a["hp"])
@@ -389,6 +909,14 @@ func _refresh() -> void:
 
 
 func _say(text: String) -> void:
+	if layout == "backview":
+		var w := float(_L["textRows"][0]["w"])
+		var wrapped: String = _ef.wrap(text, "makham-16", int(w)) if _has_pixel_font() else text
+		var lines := wrapped.split("\n")
+		var keep := 1 if _grid.visible else 3
+		_msg.text = "\n".join(lines.slice(0, keep))
+		_msg.size = _msg.get_minimum_size()
+		return
 	_msg.text = text
 
 
@@ -398,6 +926,19 @@ func _center(i: int) -> Vector2:
 
 
 func _popup(i: int, text: String, col: Color) -> void:
+	if layout == "backview":
+		var pl := _ptext(text, "makham-16", col)
+		pl.add_theme_color_override("font_shadow_color", Color("#0d0906"))
+		pl.add_theme_constant_override("shadow_offset_x", 1)
+		pl.add_theme_constant_override("shadow_offset_y", 1)
+		var c := _center(i)
+		# enemies stand right under the message window, so their numbers rise from the body
+		pl.position = Vector2(roundf(c.x - _text_w(pl) / 2.0), roundf(c.y - (19.0 if _sprites[i]["enemy"] else 41.0)))
+		_fx_layer.add_child(pl)
+		var tw0 := create_tween()
+		tw0.tween_property(pl, "position:y", pl.position.y - 14, 0.6 / maxf(speed, 0.01))
+		tw0.tween_callback(pl.queue_free)
+		return
 	var l := Label.new()
 	l.text = text
 	l.add_theme_color_override("font_color", col)
@@ -453,13 +994,22 @@ func _next() -> void:
 	if engine.over != "":
 		_finish()
 		return
+	if _atb and speed > 0.0:
+		# ATB: let time run (_atb_process) until a gauge fills
+		_turn = -1
+		_pending = {}
+		_state = "time"
+		_refresh()
+		return
 	var i := engine.current()
 	if i < 0:
 		_finish()
 		return
+	_turn = i if int(engine.actors[i]["side"]) == 0 else -1
+	_refresh()
 	if int(engine.actors[i]["side"]) == 1 or auto_party:
 		await _wait(0.25)
-		await _do(engine.auto())
+		await _do(engine.auto(), i)
 	else:
 		_pending = {"actor": i}
 		_hero_step(i, true)
@@ -469,14 +1019,19 @@ func _next() -> void:
 func _hero_step(i: int, forward: bool) -> void:
 	var s: Dictionary = _sprites[i]
 	if s and not s["enemy"]:
-		s["node"].position = s["home"] + (Vector2(-10, 0) if forward else Vector2.ZERO)
+		var off := Vector2(0, -6) if layout == "backview" else Vector2(-10, 0)
+		s["node"].position = s["home"] + (off if forward else Vector2.ZERO)
 
 
-func _do(action: Dictionary) -> void:
+func _do(action: Dictionary, who: int = -2) -> void:
 	_state = "busy"
 	_menu_panel.visible = false
+	if _grid:
+		_grid.visible = false
 	_cursor.visible = false
-	var events := engine.act(action)
+	if who == -2:
+		who = int(_pending.get("actor", -1))
+	var events := engine.act(action, who if _atb else -1)
 	for ev in events:
 		await _show(ev)
 	_refresh()
@@ -493,7 +1048,7 @@ func _show(ev: Dictionary) -> void:
 			var s: Dictionary = _sprites[ev["actor"]]
 			if s["enemy"]:
 				var tw := create_tween()
-				tw.tween_property(s["node"], "position", s["home"] + Vector2(12, 0), 0.12 / maxf(speed, 0.01))
+				tw.tween_property(s["node"], "position", s["home"] + (Vector2(0, 8) if layout == "backview" else Vector2(12, 0)), 0.12 / maxf(speed, 0.01))
 				tw.tween_property(s["node"], "position", s["home"], 0.12 / maxf(speed, 0.01))
 			else:
 				_hero_frame(ev["actor"], 18)
@@ -579,12 +1134,20 @@ func _item_label(id: String) -> String:
 
 
 func _clear_menu() -> void:
+	if _grid:
+		for c in _grid.get_children():
+			_grid.remove_child(c)
+			c.queue_free()
+		_gbuttons.clear()
+		return
 	for c in _menu.get_children():
 		_menu.remove_child(c)
 		c.queue_free()
 
 
 func _button(text: String, cb: Callable, disabled := false) -> Button:
+	if _grid:
+		return _grid_button(text, cb, disabled)
 	var b := Button.new()
 	b.text = text
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -596,6 +1159,15 @@ func _button(text: String, cb: Callable, disabled := false) -> Button:
 
 
 func _focus_first() -> void:
+	if _grid:
+		_grid.visible = true
+		var k := 0
+		for j in _gbuttons.size():
+			if not _gbuttons[j]["disabled"]:
+				k = j
+				break
+		_gfocus(k)
+		return
 	for c in _menu.get_children():
 		if c is Button and not c.disabled:
 			c.grab_focus()
@@ -655,15 +1227,86 @@ func _choose_target(action: Dictionary, target_kind: String) -> void:
 		var act := action.duplicate()
 		act["target"] = t
 		var b := _button("%s  %d/%d" % [_name(engine.actors[t]), int(engine.actors[t]["hp"]), int(engine.actors[t]["max"]["hp"])], func(): _do(act))
+		b.set_meta("target", t)
 		b.focus_entered.connect(_point.bind(t))
 		b.mouse_entered.connect(_point.bind(t))
 	_button(_t("back"), _open_commands)
 	_focus_first()
 
 
+## Back view: a 3 × 2 command grid inside the message window, paged when there are more than 6 entries.
+func _grid_button(text: String, cb: Callable, disabled: bool) -> Button:
+	var G: Dictionary = _L["grid"]
+	var cw := float(G["cell"]["w"])
+	var ch := float(G["cell"]["h"])
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	for st in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	b.size = Vector2(cw, ch)
+	b.disabled = disabled
+	b.name = "Cmd%d" % _gbuttons.size()
+	var hl := Painter.new()
+	hl.paint([[Rect2(2, 1, cw - 4, ch - 2), BLUE["sel"]], [PackedVector2Array([Vector2(3, 7), Vector2(7, 11), Vector2(3, 15)]), BLUE["sel_text"]]])
+	hl.visible = false
+	b.add_child(hl)
+	var t := _ptext(text, "makham-16", BLUE["muted"] if disabled else BLUE["text"])
+	var mx := int(cw) - 14
+	if _text_w(t) > mx and text.contains("  "):
+		_set_text(t, text.split("  ")[0])
+	var s := text.split("  ")[0] if text.contains("  ") else text
+	while _text_w(t) > mx and s.length() > 1:
+		s = s.substr(0, s.length() - 1)
+		_set_text(t, s)
+	_place(t, 10, 0)
+	b.add_child(t)
+	var k := _gbuttons.size()
+	b.pressed.connect(cb)
+	b.mouse_entered.connect(func(): _gfocus(k))
+	_grid.add_child(b)
+	_gbuttons.append({"b": b, "hl": hl, "t": t, "disabled": disabled})
+	return b
+
+
+func _gfocus(k: int) -> void:
+	if _gbuttons.is_empty():
+		return
+	_gsel = clampi(k, 0, _gbuttons.size() - 1)
+	var G: Dictionary = _L["grid"]
+	var per := int(G["cols"]) * int(G["rows"])
+	var page := _gsel / per
+	for j in _gbuttons.size():
+		var e: Dictionary = _gbuttons[j]
+		var p := j % per
+		e["b"].visible = j / per == page
+		e["b"].position = Vector2((p % int(G["cols"])) * float(G["cell"]["w"]), (p / int(G["cols"])) * float(G["cell"]["h"]))
+		e["hl"].visible = j == _gsel
+		e["t"].add_theme_color_override("font_color", BLUE["muted"] if e["disabled"] else (BLUE["sel_text"] if j == _gsel else BLUE["text"]))
+	var f: Button = _gbuttons[_gsel]["b"]
+	if f.has_meta("target"):
+		_point(int(f.get_meta("target")))
+	else:
+		_cursor.visible = false
+
+
+func _gstep(d: int) -> void:
+	var n := _gbuttons.size()
+	var k := _gsel
+	for j in n:
+		k = (k + d + n) % n
+		if not _gbuttons[k]["disabled"]:
+			break
+	_gfocus(k)
+
+
 func _point(i: int) -> void:
 	_cursor.visible = true
 	var s: Dictionary = _sprites[i]
+	if layout == "backview":
+		var y: float = s["node"].position.y - 6 if s["enemy"] else s["home"].y - 2
+		_cursor.position = Vector2(roundf(s["node"].position.x + s["w"] / 2.0 - 4.5), y)
+		return
 	_cursor.position = s["node"].position + Vector2(s["w"] / 2.0 - 5, -14)
 
 
@@ -672,6 +1315,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _state == "done" and (event.is_action_pressed("ui_accept") or (event is InputEventMouseButton and event.pressed)):
 			_close()
 		return
+	if _grid and _grid.visible and event is InputEventKey and event.pressed:
+		var cols := int(_L["grid"]["cols"])
+		var handled := true
+		match event.keycode:
+			KEY_RIGHT, KEY_D:
+				_gstep(1)
+			KEY_LEFT, KEY_A:
+				_gstep(-1)
+			KEY_DOWN, KEY_S:
+				_gstep(cols)
+			KEY_UP, KEY_W:
+				_gstep(-cols)
+			KEY_ENTER, KEY_KP_ENTER, KEY_Z, KEY_SPACE:
+				var e: Dictionary = _gbuttons[_gsel]
+				if not e["disabled"]:
+					e["b"].pressed.emit()
+			_:
+				handled = false
+		if handled:
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_X):
 		if _state != "command":
 			_open_commands()
@@ -683,9 +1347,16 @@ func _finish() -> void:
 		return
 	_state = "done"
 	_menu_panel.visible = false
+	if _grid:
+		_grid.visible = false
 	_cursor.visible = false
 	_result = engine.over
 	_rewards = engine.rewards()
+	_turn = -1
+	_refresh()
+	if layout == "backview" and _has_pixel_font():
+		_finish_backview()
+		return
 	_result_panel = PanelContainer.new()
 	_result_panel.position = Vector2(120, 60)
 	_result_panel.custom_minimum_size = Vector2(240, 0)
@@ -728,6 +1399,42 @@ func _finish() -> void:
 		_close()
 
 
+func _finish_backview() -> void:
+	var lines: Array = []
+	if _result == "win":
+		lines.append(_t("xp") % [int(_rewards["xp"]), int(_rewards["coins"])])
+		for d in _rewards["drops"]:
+			lines.append(_t("got") % [_item_label(d["item"]), int(d["n"])])
+		for lv in _rewards["levels"]:
+			var nm := ""
+			for a in engine.actors:
+				if a["id"] == lv["id"]:
+					nm = _name(a)
+			lines.append(_t("level") % [nm, int(lv["to"])])
+	var h := mini(124, 34 + 22 * lines.size())
+	var box := _blue_panel(Rect2(100, 84, 280, h))
+	box.name = "Result"
+	var title := _ptext(_t(_result), "makham-16", BLUE["sel_text"])
+	title.position = Vector2(roundf(140 - _text_w(title) / 2.0), 6)
+	box.add_child(title)
+	for k in mini(lines.size(), 4):
+		var l := _ptext(lines[k], "makham-16", BLUE["text"])
+		l.position = Vector2(14, 28 + k * 22)
+		box.add_child(l)
+	_result_panel = PanelContainer.new()
+	add_child(box)
+	if _result == "win":
+		for i in engine.actors.size():
+			if int(engine.actors[i]["side"]) == 0 and int(engine.actors[i]["hp"]) > 0:
+				_hero_frame(i, 16)
+		_play_sfx("coin")
+	_refresh()
+	_say(_t(_result))
+	if opts.get("auto_close", false) or speed <= 0.0:
+		await _wait(1.2)
+		_close()
+
+
 func _close() -> void:
 	if not is_inside_tree():
 		return
@@ -735,3 +1442,88 @@ func _close() -> void:
 	if opts.get("keep", false):
 		return
 	queue_free()
+
+
+## Engine calls that may log events (start-of-turn skips) → play them.
+func _play_log_from(start: int) -> void:
+	for ev in engine.log.slice(start):
+		await _show(ev)
+
+
+## ATB clock: every frame. Time runs while waiting ("time"), and in menus unless atbMode is "wait".
+func _atb_process(delta: float) -> void:
+	if not _atb or engine == null or engine.over != "" or speed <= 0.0:
+		return
+	var menu := _state in ["command", "skills", "items", "target"]
+	if _state != "time" and not menu:
+		return
+	_atb_acc += delta * float(EasyBattleEngine.ATB["stepsPerSecond"]) * speed
+	var n := int(floor(_atb_acc))
+	_atb_acc -= n
+	var before := str(engine.ready())
+	if n > 0:
+		engine.advance(mini(n, 30), menu)
+	if str(engine.ready()) != before:
+		_refresh_cards()
+	else:
+		_draw_time_bars()
+	if _state == "time":
+		_atb_dispatch()
+	elif menu and engine.atb_mode == "active":
+		for i in engine.ready():
+			if int(engine.actors[i]["side"]) == 1:
+				_atb_interrupt(i)
+				break
+
+
+## ATB: the head of the ready queue acts — enemies (and heroes on auto) at once, heroes get their menu.
+func _atb_dispatch() -> void:
+	_state = "busy"
+	var start := engine.log.size()
+	var i := engine.ready_actor()
+	await _play_log_from(start)
+	if engine.over != "":
+		_finish()
+		return
+	if i < 0:
+		_next()
+		return
+	if int(engine.actors[i]["side"]) == 1 or auto_party:
+		_turn = i if int(engine.actors[i]["side"]) == 0 else -1
+		_refresh()
+		await _wait(0.2)
+		await _do(engine.auto(i), i)
+		return
+	_pending = {"actor": i}
+	_turn = i
+	_refresh()
+	_hero_step(i, true)
+	_open_commands()
+
+
+## ATB active mode: an enemy whose gauge fills acts while a hero is choosing; the hero's menu comes back.
+func _atb_interrupt(e: int) -> void:
+	var hero := int(_pending.get("actor", -1))
+	_state = "busy"
+	_menu_panel.visible = false
+	if _grid:
+		_grid.visible = false
+	_cursor.visible = false
+	await _wait(0.1)
+	var start := engine.log.size()
+	var action := engine.auto(e)
+	engine.act(action, e)
+	await _play_log_from(start)
+	_refresh()
+	if engine.over != "":
+		_finish()
+		return
+	if hero >= 0 and int(engine.actors[hero]["hp"]) > 0 and engine.ready().has(hero):
+		_pending = {"actor": hero}
+		_turn = hero
+		_refresh()
+		_open_commands()
+		return
+	if hero >= 0:
+		_hero_step(hero, false)
+	_next()

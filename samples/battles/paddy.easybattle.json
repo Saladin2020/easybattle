@@ -1,0 +1,199 @@
+{
+  "format": "easybattle/1",
+  "id": "paddy",
+  "name": {
+    "th": "ศัตรูท้องนา",
+    "en": "Paddy pests",
+    "ms": "Perosak sawah"
+  },
+  "enemies": [
+    {
+      "id": "apple_snail",
+      "name": {
+        "th": "หอยเชอรี่",
+        "en": "Golden apple snail",
+        "ms": "Siput gondang emas"
+      },
+      "level": 1,
+      "stats": {
+        "hp": 52,
+        "mp": 4,
+        "atk": 9,
+        "def": 14,
+        "mag": 5,
+        "res": 6,
+        "spd": 3
+      },
+      "skills": [
+        {
+          "skill": "mud_throw",
+          "weight": 2
+        },
+        {
+          "skill": "attack",
+          "weight": 2
+        }
+      ],
+      "xp": 6,
+      "coins": 3,
+      "art": "snail",
+      "weak": [
+        "fire",
+        "thunder"
+      ],
+      "resist": [
+        "water"
+      ],
+      "drops": [
+        {
+          "item": "egg",
+          "chance": 10
+        }
+      ]
+    },
+    {
+      "id": "field_rat",
+      "name": {
+        "th": "หนูนา",
+        "en": "Paddy rat",
+        "ms": "Tikus sawah"
+      },
+      "level": 2,
+      "stats": {
+        "hp": 40,
+        "mp": 0,
+        "atk": 12,
+        "def": 5,
+        "mag": 2,
+        "res": 4,
+        "spd": 15
+      },
+      "skills": [
+        {
+          "skill": "bite",
+          "weight": 3
+        },
+        {
+          "skill": "steal_snack",
+          "weight": 1
+        },
+        {
+          "skill": "attack",
+          "weight": 1
+        }
+      ],
+      "xp": 7,
+      "coins": 5,
+      "art": "rat",
+      "weak": [
+        "fire"
+      ],
+      "drops": [
+        {
+          "item": "banana",
+          "chance": 20
+        }
+      ]
+    },
+    {
+      "id": "restless_scarecrow",
+      "name": {
+        "th": "หุ่นไล่กาซุกซน",
+        "en": "Restless scarecrow",
+        "ms": "Orang-orang sawah nakal"
+      },
+      "level": 3,
+      "stats": {
+        "hp": 70,
+        "mp": 8,
+        "atk": 13,
+        "def": 9,
+        "mag": 8,
+        "res": 7,
+        "spd": 7
+      },
+      "skills": [
+        {
+          "skill": "charge",
+          "weight": 2
+        },
+        {
+          "skill": "screech",
+          "weight": 1
+        },
+        {
+          "skill": "attack",
+          "weight": 2
+        }
+      ],
+      "xp": 12,
+      "coins": 8,
+      "art": "scarecrow",
+      "weak": [
+        "fire",
+        "wind"
+      ],
+      "resist": [
+        "earth"
+      ],
+      "drops": [
+        {
+          "item": "mango",
+          "chance": 15
+        }
+      ]
+    }
+  ],
+  "encounters": [
+    {
+      "id": "paddy_pests",
+      "name": {
+        "th": "ศัตรูพืชในนาข้าว",
+        "en": "Paddy pests",
+        "ms": "Perosak sawah padi"
+      },
+      "cultures": [
+        "thai",
+        "malay"
+      ],
+      "terrains": [
+        "field"
+      ],
+      "rate": 30,
+      "scripted": true,
+      "groups": [
+        {
+          "enemies": [
+            "field_rat",
+            "apple_snail",
+            "field_rat"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "apple_snail",
+            "apple_snail"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "restless_scarecrow",
+            "field_rat"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "paddy_crab",
+            "restless_scarecrow",
+            "giant_mosquito"
+          ],
+          "weight": 2
+        }
+      ],
+      "music": "market_chase"
+    }
+  ]
+}

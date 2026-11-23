@@ -21,7 +21,7 @@ async function exercise(client, label) {
   if (tools.length !== 9) fail(`${label}: expected 9 tools`);
   const info = body(await client.callTool({ name: "workspace_info", arguments: {} }));
   console.log(`[${label}] heroes=${info.heroes?.length} enemies=${info.enemies?.length} skills=${info.skills?.length} tables=${info.encounters?.length}`);
-  if (info.enemies?.length !== 14) fail(`${label}: workspace_info`);
+  if (info.enemies?.length !== 17) fail(`${label}: workspace_info`);
   const chk = body(await client.callTool({ name: "check_battles", arguments: {} }));
   console.log(`[${label}] check ok=${chk.ok}`);
   if (!chk.ok) fail(`${label}: check_battles`);
@@ -34,6 +34,10 @@ async function exercise(client, label) {
   const img = r.content?.find((c) => c.type === "image");
   console.log(`[${label}] render image bytes:`, img ? Buffer.from(img.data, "base64").length : 0);
   if (!img) fail(`${label}: render_battle`);
+  const bv = await client.callTool({ name: "render_battle", arguments: { scale: 1, layout: "backview", status: "cards" } });
+  const bimg = bv.content?.find((c) => c.type === "image");
+  console.log(`[${label}] backview render bytes:`, bimg ? Buffer.from(bimg.data, "base64").length : 0);
+  if (!bimg) fail(`${label}: render_battle backview`);
 }
 
 {
