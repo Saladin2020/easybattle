@@ -146,6 +146,45 @@ func _init() -> void:
 					fail = true
 				sc.queue_free()
 				await process_frame
+			# ATB: time runs, a full gauge opens the menu, wait mode stops time in menus, active keeps it running
+			for mode in ["wait", "active"]:
+				battle.lang = "th"
+				battle.reset_party([], 6)
+				var sa = battle.start(battle.scripted("paddy_pests" if _has_table(db, "paddy_pests") else "plains_fields", 4), root_node, {"speed": 4.0, "layout": "backview", "status": "cards", "lang": "th", "keep": true, "timing": "atb", "atbMode": mode})
+				var bad3: Array = []
+				var t0 := Time.get_ticks_msec()
+				while sa._state != "command" and Time.get_ticks_msec() - t0 < 20000:
+					await process_frame
+				if sa._state != "command":
+					bad3.append("no command menu")
+				var st3: Array = sa.layout_rects()["states"]
+				if st3.count("ready") < 1:
+					bad3.append("no READY! %s" % [st3])
+				for pair in sa.layout_rects()["time"]:
+					if not pair[1].encloses(pair[0]):
+						bad3.append("time bar outside card")
+				if sa.layout_rects()["time"].size() != sa._cards.size():
+					bad3.append("time bars %d" % sa.layout_rects()["time"].size())
+				bad3.append_array(_check_layout(sa.layout_rects(), "th"))
+				var s0: int = sa.engine.steps
+				var t1 := Time.get_ticks_msec()
+				while Time.get_ticks_msec() - t1 < 600:
+					await process_frame
+				var moved: bool = sa.engine.steps > s0
+				if (mode == "wait") == moved:
+					bad3.append("time %s in a %s-mode menu" % ["ran" if moved else "stopped", mode])
+				sa.auto_party = true
+				if sa._state in ["command", "skills", "items", "target"]:
+					var h := int(sa._pending.get("actor", -1))
+					sa._do(sa.engine.auto(h), h)
+				var t2 := Time.get_ticks_msec()
+				while sa._state != "done" and Time.get_ticks_msec() - t2 < 60000:
+					await process_frame
+				print("A| atb %s steps=%d rounds=%d result=%s %s" % [mode, sa.engine.steps, sa.engine.round_no, sa._result, "ok" if bad3.is_empty() else "FAILED " + "; ".join(bad3)])
+				if sa._state != "done" or not bad3.is_empty():
+					fail = true
+				sa.queue_free()
+				await process_frame
 			# classic + cards and classic + none still build
 			for stv in ["cards", "none"]:
 				battle.lang = "th"

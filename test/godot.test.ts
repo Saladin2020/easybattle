@@ -31,6 +31,7 @@ describe.skipIf(!GODOT)("Godot export", () => {
       expect(run.stdout).toMatch(new RegExp(`^B\\| backview ${lang} cards=3 enemies=\\d+ states=[a-z,]+ ok$`, "m"));
       expect(run.stdout).toMatch(new RegExp(`^B\\| backview ${lang} result=(win|lose|fled)$`, "m"));
     }
+    for (const mode of ["wait", "active"]) expect(run.stdout).toMatch(new RegExp(`^A\\| atb ${mode} steps=\\d+ rounds=\\d+ result=(win|lose|fled) ok$`, "m"));
     expect(run.stdout).toMatch(/^B\| classic cards result=win ok$/m);
     expect(run.stdout).toMatch(/^B\| classic none result=win ok$/m);
     expect(run.stdout).toMatch(/^OK$/m);

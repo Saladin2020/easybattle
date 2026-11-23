@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { Battle } from "../shared/engine.js";
+import { ATB, type Battle } from "../shared/engine.js";
 import { backdropFor, backviewEnemyRects, PORTRAIT_CROP, resolveUi, screenLayout, SHEET_ROW, type Rect } from "../shared/layout.js";
 import type { BattleDb, UiSettings } from "../shared/types.js";
 import { drawEnemy } from "./art.js";
@@ -68,6 +68,14 @@ async function drawCards(r: Raster, root: string, db: BattleDb, b: Battle, cards
       r.rect(bar.x - 1, bar.y - 1, bar.w + 2, bar.h + 2, CARD.ink);
       r.rect(bar.x, bar.y, bar.w, bar.h, "#2a2a3a");
       r.rect(bar.x, bar.y, Math.round(bar.w * v), bar.h, col);
+    }
+    if (b.timing === "atb") {
+      // ATB time bar (same colours as the runtimes); the preview has no text, so the stripe stands alone
+      const t = c.time;
+      const v = a.hp > 0 ? Math.min(1, b.gauge[i]! / ATB.full) : 0;
+      r.rect(t.x - 1, t.y - 1, t.w + 2, t.h + 2, CARD.ink);
+      r.rect(t.x, t.y, t.w, t.h, "#0e1420");
+      if (v > 0) r.rect(t.x, t.y, Math.max(1, Math.round(t.w * v)), t.h, v >= 1 ? "#b03c1e" : "#23804a");
     }
   }
 }

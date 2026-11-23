@@ -12,6 +12,11 @@ extends Control
 ##   backview — 16-bit back view: blue message window on top, enemies on a paddy/forest backdrop, the party seen
 ##              from behind (Easy Sprite back row) with curved HP gauges
 ##   status   — "rows" (classic panel), "cards" (Easy Portrait face, Lv, LIFE/POW bars, READY!/WAIT...) or "none"
+##
+## Timing (easybattle.json ui.timing, or opts {timing, atbMode}): "turn" (default) or "atb" — active time battle:
+## gauges fill by SPD, a full gauge reads READY! and opens that hero's menu, the others read WAIT... over a filling
+## time bar on the status card, enemies act when theirs fill. atbMode "wait" (default) stops time while a menu is
+## open, "active" keeps it running. speed 0 skips the real-time wait (tests).
 
 signal finished(result: String, rewards: Dictionary, used_items: Dictionary)
 
@@ -87,6 +92,9 @@ var _gbuttons: Array = []     # backview grid entries {b, hl, t, disabled, targe
 var _gsel := 0
 
 const BLUE := {"fill": Color("#2a3a9c"), "fill2": Color("#3446b4"), "border": Color("#f2f4ff"), "inner": Color("#8a98e8"), "ink": Color("#0d0906"), "sel": Color("#5a6ef0"), "sel_text": Color("#ffe27a"), "text": Color("#f7f8ff"), "muted": Color("#8a90b8")}
+const TIME := {"empty": Color("#0e1420"), "fill": Color("#23804a"), "full": Color("#b03c1e"), "edge": Color("#0d0906"), "wait_text": Color("#eef2ff")}
+var _atb := false
+var _atb_acc := 0.0
 const CARD := {"fill": Color("#1c2436"), "border": Color("#6a7aa8"), "active": Color("#ffd23a"), "active_fill": Color("#2c3a5c"), "life": Color("#5ad06a"), "life_low": Color("#e8c040"), "life_crit": Color("#e0503a"), "pow": Color("#4aa0f0"), "ready": Color("#ffe27a"), "wait": Color("#a8b0c8"), "down": Color("#e06a5a"), "lv": Color("#0d0906")}
 
 
@@ -126,7 +134,10 @@ func _ready() -> void:
 		setup["party"] = [{"id": _db["heroes"][0]["id"], "level": 3}, {"id": _db["heroes"][1]["id"], "level": 3}, {"id": _db["heroes"][2]["id"], "level": 3}]
 	if not setup.has("seed"):
 		setup["seed"] = 1
+	setup["timing"] = String(opts.get("timing", setup.get("timing", _ui.get("timing", "turn"))))
+	setup["atbMode"] = String(opts.get("atbMode", setup.get("atbMode", _ui.get("atbMode", "wait"))))
 	engine = EasyBattleEngine.new(_db, setup)
+	_atb = engine.timing == "atb"
 	_build_ui()
 	var names: Array = []
 	for a in engine.actors:
@@ -668,12 +679,15 @@ func _build_cards() -> void:
 		c.add_child(portrait)
 		var bars := Painter.new()
 		c.add_child(bars)
+		var time := Painter.new()
+		time.name = "Time"
+		c.add_child(time)
 		var lvr := _rect(R["lv"])
 		var lvbg := Painter.new()
 		lvbg.paint([[lvr, CARD["border"]], [lvr.grow(-1), CARD["lv"]]])
 		c.add_child(lvbg)
 		var compact: bool = R.get("compact", false)
-		var e := {"i": i, "R": R, "c": c, "bg": bg, "bars": bars, "portrait": portrait, "faces": faces,
+		var e := {"i": i, "R": R, "c": c, "bg": bg, "bars": bars, "time": time, "portrait": portrait, "faces": faces,
 			"lv": _ptext("", "makham-8", Color.WHITE),
 			"life": _ptext("" if compact else _t("life"), "makham-16", Color("#d8f0d8")),
 			"life_v": _ptext("", "makham-16", Color.WHITE),
@@ -689,7 +703,25 @@ func _build_cards() -> void:
 func card_state(i: int) -> String:
 	if int(engine.actors[i]["hp"]) <= 0:
 		return "down"
+	if _atb:
+		return "ready" if engine.ready().has(i) else "wait"
 	return "ready" if i == _turn else "wait"
+
+
+## ATB time bars: a stripe behind READY! / WAIT... that fills with the gauge (green), full = orange.
+func _draw_time_bars() -> void:
+	if not _atb:
+		return
+	for e in _cards:
+		var r := _rect(e["R"]["time"]) if e["R"].has("time") else Rect2()
+		if r.size.x <= 0:
+			continue
+		var a: Dictionary = engine.actors[e["i"]]
+		var v := minf(1.0, float(engine.gauge[e["i"]]) / float(EasyBattleEngine.ATB["full"])) if int(a["hp"]) > 0 else 0.0
+		var cmds: Array = [[r.grow(1), TIME["edge"]], [r, TIME["empty"]]]
+		if v > 0.0:
+			cmds.append([Rect2(r.position, Vector2(maxf(1.0, roundf(r.size.x * v)), r.size.y)), TIME["full"] if v >= 1.0 else TIME["fill"]])
+		e["time"].paint(cmds)
 
 
 func _refresh_cards() -> void:
@@ -697,7 +729,7 @@ func _refresh_cards() -> void:
 		var R: Dictionary = e["R"]
 		var a: Dictionary = engine.actors[e["i"]]
 		var st := card_state(e["i"])
-		var active := st == "ready"
+		var active: bool = (e["i"] == _turn) if _atb else st == "ready"
 		var r := _rect(R["rect"])
 		var pr := _rect(R["portrait"])
 		e["bg"].paint([[r, CARD["lv"]], [r.grow(-1), CARD["active"] if active else CARD["border"]], [r.grow(-2), CARD["active_fill"] if active else CARD["fill"]], [pr.grow(1), CARD["lv"]]])
@@ -726,16 +758,17 @@ func _refresh_cards() -> void:
 			cmds.append([Rect2(br.position, Vector2(roundf(br.size.x * b[1]), br.size.y)), b[2]])
 		e["bars"].paint(cmds)
 		_set_text(e["state"], _t(st))
-		e["state"].add_theme_color_override("font_color", CARD["ready"] if st == "ready" else (CARD["down"] if st == "down" else CARD["wait"]))
+		e["state"].add_theme_color_override("font_color", CARD["ready"] if st == "ready" else (CARD["down"] if st == "down" else (TIME["wait_text"] if _atb else CARD["wait"])))
 		var sr := _rect(R["state"])
 		_place(e["state"], sr.position.x + roundf((sr.size.x - _text_w(e["state"])) / 2.0), sr.position.y)
+	_draw_time_bars()
 
 
 ## Where everything ended up on screen, for tests and tools:
 ## {window, enemies: [Rect2], heroes: [Rect2], arcs: [Rect2], cards: [Rect2], card_text: [[Rect2 label, Rect2 card]],
 ##  menu_text: [[Rect2 label, Rect2 cell]], states: [String]}
 func layout_rects() -> Dictionary:
-	var out := {"window": Rect2(), "enemies": [], "heroes": [], "arcs": [], "cards": [], "card_text": [], "menu_text": [], "states": []}
+	var out := {"window": Rect2(), "enemies": [], "heroes": [], "arcs": [], "cards": [], "card_text": [], "menu_text": [], "states": [], "time": []}
 	if _L.has("window"):
 		out["window"] = _rect(_L["window"])
 	for s in _sprites:
@@ -752,6 +785,8 @@ func layout_rects() -> Dictionary:
 			if l.text != "":
 				out["card_text"].append([Rect2(l.position, l.get_minimum_size()), cr])
 		out["states"].append(card_state(e["i"]))
+		if _atb and e["R"].has("time"):
+			out["time"].append([_rect(e["R"]["time"]), cr])
 	for g in _gbuttons:
 		var b: Button = g["b"]
 		if b.visible:
@@ -954,6 +989,13 @@ func _next() -> void:
 	if engine.over != "":
 		_finish()
 		return
+	if _atb and speed > 0.0:
+		# ATB: let time run (_atb_process) until a gauge fills
+		_turn = -1
+		_pending = {}
+		_state = "time"
+		_refresh()
+		return
 	var i := engine.current()
 	if i < 0:
 		_finish()
@@ -962,7 +1004,7 @@ func _next() -> void:
 	_refresh()
 	if int(engine.actors[i]["side"]) == 1 or auto_party:
 		await _wait(0.25)
-		await _do(engine.auto())
+		await _do(engine.auto(), i)
 	else:
 		_pending = {"actor": i}
 		_hero_step(i, true)
@@ -976,13 +1018,15 @@ func _hero_step(i: int, forward: bool) -> void:
 		s["node"].position = s["home"] + (off if forward else Vector2.ZERO)
 
 
-func _do(action: Dictionary) -> void:
+func _do(action: Dictionary, who: int = -2) -> void:
 	_state = "busy"
 	_menu_panel.visible = false
 	if _grid:
 		_grid.visible = false
 	_cursor.visible = false
-	var events := engine.act(action)
+	if who == -2:
+		who = int(_pending.get("actor", -1))
+	var events := engine.act(action, who if _atb else -1)
 	for ev in events:
 		await _show(ev)
 	_refresh()
@@ -1395,5 +1439,86 @@ func _close() -> void:
 	queue_free()
 
 
-func _atb_process(_delta: float) -> void:
-	pass
+## Engine calls that may log events (start-of-turn skips) → play them.
+func _play_log_from(start: int) -> void:
+	for ev in engine.log.slice(start):
+		await _show(ev)
+
+
+## ATB clock: every frame. Time runs while waiting ("time"), and in menus unless atbMode is "wait".
+func _atb_process(delta: float) -> void:
+	if not _atb or engine == null or engine.over != "" or speed <= 0.0:
+		return
+	var menu := _state in ["command", "skills", "items", "target"]
+	if _state != "time" and not menu:
+		return
+	_atb_acc += delta * float(EasyBattleEngine.ATB["stepsPerSecond"]) * speed
+	var n := int(floor(_atb_acc))
+	_atb_acc -= n
+	var before := str(engine.ready())
+	if n > 0:
+		engine.advance(mini(n, 30), menu)
+	if str(engine.ready()) != before:
+		_refresh_cards()
+	else:
+		_draw_time_bars()
+	if _state == "time":
+		_atb_dispatch()
+	elif menu and engine.atb_mode == "active":
+		for i in engine.ready():
+			if int(engine.actors[i]["side"]) == 1:
+				_atb_interrupt(i)
+				break
+
+
+## ATB: the head of the ready queue acts — enemies (and heroes on auto) at once, heroes get their menu.
+func _atb_dispatch() -> void:
+	_state = "busy"
+	var start := engine.log.size()
+	var i := engine.ready_actor()
+	await _play_log_from(start)
+	if engine.over != "":
+		_finish()
+		return
+	if i < 0:
+		_next()
+		return
+	if int(engine.actors[i]["side"]) == 1 or auto_party:
+		_turn = i if int(engine.actors[i]["side"]) == 0 else -1
+		_refresh()
+		await _wait(0.2)
+		await _do(engine.auto(i), i)
+		return
+	_pending = {"actor": i}
+	_turn = i
+	_refresh()
+	_hero_step(i, true)
+	_open_commands()
+
+
+## ATB active mode: an enemy whose gauge fills acts while a hero is choosing; the hero's menu comes back.
+func _atb_interrupt(e: int) -> void:
+	var hero := int(_pending.get("actor", -1))
+	_state = "busy"
+	_menu_panel.visible = false
+	if _grid:
+		_grid.visible = false
+	_cursor.visible = false
+	await _wait(0.1)
+	var start := engine.log.size()
+	var action := engine.auto(e)
+	engine.act(action, e)
+	await _play_log_from(start)
+	_refresh()
+	if engine.over != "":
+		_finish()
+		return
+	if hero >= 0 and int(engine.actors[hero]["hp"]) > 0 and engine.ready().has(hero):
+		_pending = {"actor": hero}
+		_turn = hero
+		_refresh()
+		_open_commands()
+		return
+	if hero >= 0:
+		_hero_step(hero, false)
+	_next()

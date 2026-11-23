@@ -1,3 +1,5 @@
+import { decodePng } from "../src/lib/png.js";
+import { drawEnemy, FRONT_ARTS } from "../src/lib/art.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -35,6 +37,27 @@ describe("export", () => {
     }
     const pixi = readFileSync(path.join(root, "exports/easybattle-pixi/index.html"), "utf8");
     expect(pixi).toMatch(/layout=backview|"backview"/);
+    expect(pixi).toMatch(/timing/);
+  });
+
+  it("ships front-facing enemy strips (same size as the side strips) and the ATB settings", () => {
+    for (const dir of ["easybattle-godot/easybattle", "easybattle-pixi"]) {
+      const data = JSON.parse(readFileSync(path.join(root, "exports", dir, "easybattle.json"), "utf8"));
+      expect(data.ui.timing).toBe("turn");
+      expect(data.ui.atbMode).toBe("wait");
+      expect(data.ui.layouts["backview:cards"]["3"].cards[0].time).toBeDefined();
+      for (const art of new Set<string>(data.db.enemies.map((e: { art: string }) => e.art))) {
+        const side = decodePng(readFileSync(path.join(root, "exports", dir, `enemies/${art}.png`)));
+        const front = decodePng(readFileSync(path.join(root, "exports", dir, `enemies/${art}_front.png`)));
+        expect([front.width, front.height], art).toEqual([side.width, side.height]);
+      }
+    }
+    for (const art of FRONT_ARTS) {
+      const s = drawEnemy(art, undefined, "side").frames[0]!;
+      const f = drawEnemy(art, undefined, "front").frames[0]!;
+      expect(Buffer.from(f.data).equals(Buffer.from(s.data)), `${art} front differs from side`).toBe(false);
+    }
+    expect(FRONT_ARTS.length).toBeGreaterThanOrEqual(10);
   });
 
   it("refuses paths outside the workspace", async () => {

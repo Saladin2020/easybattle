@@ -1,7 +1,7 @@
 extends SceneTree
 ## Frame capture for previews (needs a renderer, e.g. xvfb-run … --rendering-driver opengl3):
 ##   godot --path <export> --script res://capture.gd -- table=plains_fields seed=7 out=/tmp/frames every=3 max=900 lang=th
-##   layout=backview status=cards backdrop=paddy auto=0 (auto=0 stops at the first command menu)
+##   layout=backview status=cards backdrop=paddy auto=0 (auto=0 stops at the first command menu) timing=atb atbMode=active
 
 var _args := {}
 var _frame := 0
@@ -23,7 +23,7 @@ func _init() -> void:
 	var holder := Control.new()
 	get_root().add_child(holder)
 	var opts := {"auto": _args.get("auto", "1") != "0", "speed": float(_args.get("speed", "1.5")), "items": {"balm": 2, "kurma": 1}, "keep": true, "auto_close": true, "lang": battle.lang}
-	for k in ["layout", "status", "backdrop"]:
+	for k in ["layout", "status", "backdrop", "timing", "atbMode"]:
 		if _args.has(k):
 			opts[k] = _args[k]
 	battle.start(setup, holder, opts)

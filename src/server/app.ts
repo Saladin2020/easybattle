@@ -20,7 +20,7 @@ export function createApp(o: CreateAppOptions): Hono {
   const root = o.workspaceRoot;
   useGuard(app, o);
   app.get("/api/workspace", async (c) => c.json({ ...(await workspaceSummary(root)), enums: { art: ENEMY_ART, kinds: SKILL_KINDS, targets: TARGETS, statusKinds: STATUS_KINDS, terrains: TERRAINS, cultures: CULTURES, layouts: UI_LAYOUTS, status: UI_STATUS, backdrops: UI_BACKDROPS, timing: UI_TIMING, atbModes: UI_ATB_MODES } }));
-  /** Battle screen preview PNG (no text): ?layout=&status=&backdrop=&terrain=&table=&seed=&turns= */
+  /** Battle screen preview PNG (no text): ?layout=&status=&backdrop=&terrain=&table=&seed=&turns=&timing= */
   app.get("/api/render", async (c) => {
     try {
       const db = await loadDbStrict(root);
@@ -28,8 +28,9 @@ export function createApp(o: CreateAppOptions): Hono {
       const pick = <T extends string>(v: string | undefined, ok: readonly T[]) => (v && (ok as readonly string[]).includes(v) ? (v as T) : undefined);
       const table = db.encounters.find((t) => t.id === q("table"));
       const ids = table ? table.groups[0]!.enemies : db.enemies.filter((e) => !e.boss).slice(0, 3).map((e) => e.id);
-      const b = new Battle(db, { party: db.heroes.slice(0, db.rules.partySize).map((h) => ({ id: h.id, level: 5 })), enemies: ids.map((id) => ({ id })), seed: Number(q("seed") ?? 1) });
+      const b = new Battle(db, { party: db.heroes.slice(0, db.rules.partySize).map((h) => ({ id: h.id, level: 5 })), enemies: ids.map((id) => ({ id })), seed: Number(q("seed") ?? 1), timing: q("timing") === "atb" ? "atb" : "turn" });
       for (let k = 0; k < Number(q("turns") ?? 0) && !b.over; k++) b.act(b.auto());
+      b.advance(12);
       const png = await renderBattlePng(root, db, b, 2, { layout: pick<UiLayout>(q("layout"), UI_LAYOUTS), status: pick<UiStatus>(q("status"), UI_STATUS), backdrop: pick<UiBackdrop>(q("backdrop"), UI_BACKDROPS), terrain: q("terrain") ?? table?.terrains[0] ?? "grass" });
       return c.body(bytes(png), 200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
     } catch (e) {

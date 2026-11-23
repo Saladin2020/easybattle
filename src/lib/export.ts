@@ -305,6 +305,7 @@ Serve this folder over HTTP (fetch needs it):  python3 -m http.server   then ope
   font/                 มะขาม 16 / 8 pixel fonts + Easy Font's Pixi loader (SIL OFL 1.1), when Easy Font is installed
 
 Layouts: index.html?layout=backview&status=cards (or start(app, setup, { layout, status, backdrop })).
+ATB: index.html?timing=atb (&atb=active) or start(app, setup, { timing: "atb", atbMode: "wait" | "active" }).
 `);
 }
 
@@ -330,6 +331,7 @@ function pixiDemo(db: BattleDb): string {
       <button data-lang="th">ไทย</button><button data-lang="en">EN</button><button data-lang="ms">BM</button>
       <button data-layout="classic">Classic</button><button data-layout="backview">Backview</button>
       <button data-status="rows">HP rows</button><button data-status="cards">Cards</button><button data-status="none">No status</button>
+      <button data-timing="turn">Turn</button><button data-timing="atb">ATB</button><button id="atbmode">ATB active</button>
       <button id="auto">Auto</button>
   </div>
   <div id="stage"></div>
@@ -348,20 +350,23 @@ function pixiDemo(db: BattleDb): string {
     const q = new URLSearchParams(location.search);
     let lang = q.get("lang") ?? "th", table = q.get("table") ?? ${JSON.stringify(db.encounters[0]?.id ?? "")}, auto = q.has("auto"), ui = null;
     let layout = q.get("layout") ?? eb.ui?.layout ?? "classic", status = q.get("status") ?? undefined;
+    let timing = q.get("timing") ?? eb.ui?.timing ?? "turn", atbMode = q.get("atb") ?? eb.ui?.atbMode ?? "wait";
     const level = Number(q.get("level") ?? 4), seed = Number(q.get("seed") ?? 7), speed = Number(q.get("speed") ?? 1);
     const start = () => {
       if (ui && !ui.view.destroyed) ui.view.destroy({ children: true });
       const setup = eb.scripted(table, seed);
       setup.party = eb.party(level);
       setup.items = { balm: 2, teh_tarik: 1, kurma: 2 };
-      ui = eb.start(app, setup, { lang, auto, speed, keep: true, layout, status, onEnd: (r, rw) => { window.__battle.result = r; window.__battle.rewards = rw; } });
+      ui = eb.start(app, setup, { lang, auto, speed, keep: true, layout, status, timing, atbMode, onEnd: (r, rw) => { window.__battle.result = r; window.__battle.rewards = rw; } });
       window.__battle = { eb, ui, result: null, rewards: null };
-      document.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.table === table || b.dataset.lang === lang || b.dataset.layout === ui.layout || b.dataset.status === ui.status || (b.id === "auto" && auto)));
+      document.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.table === table || b.dataset.lang === lang || b.dataset.layout === ui.layout || b.dataset.status === ui.status || b.dataset.timing === timing || (b.id === "atbmode" && atbMode === "active") || (b.id === "auto" && auto)));
     };
     document.querySelectorAll("[data-table]").forEach((b) => b.onclick = () => { table = b.dataset.table; start(); });
     document.querySelectorAll("[data-lang]").forEach((b) => b.onclick = () => { lang = b.dataset.lang; start(); });
     document.querySelectorAll("[data-layout]").forEach((b) => b.onclick = () => { layout = b.dataset.layout; status = undefined; start(); });
     document.querySelectorAll("[data-status]").forEach((b) => b.onclick = () => { status = b.dataset.status; start(); });
+    document.querySelectorAll("[data-timing]").forEach((b) => b.onclick = () => { timing = b.dataset.timing; start(); });
+    document.getElementById("atbmode").onclick = () => { atbMode = atbMode === "active" ? "wait" : "active"; timing = "atb"; start(); };
     document.getElementById("auto").onclick = () => { auto = !auto; start(); };
     start();
     window.__ready = true;

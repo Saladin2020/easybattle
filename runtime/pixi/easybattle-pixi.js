@@ -13,8 +13,13 @@
  * screen with a message window on top, enemies on a paddy / forest field and the party seen from behind with curved
  * HP gauges. opts.status: "rows" (classic HP / MP rows), "cards" (portrait status cards: LIFE, POW, READY! / WAIT...)
  * or "none". Thai text in the backview and on cards uses the bundled มะขาม 16 / มะขาม 8 pixel fonts (Easy Font).
+ *
+ * Timing (opts.timing or the export's ui.timing): "turn" (default) or "atb" — active time battle: gauges fill by SPD,
+ * a full gauge reads READY! and opens that hero's menu, everyone else reads WAIT... over a filling time bar on the
+ * status card, enemies act when theirs fill. opts.atbMode "wait" (default) stops time while a menu is open,
+ * "active" keeps it running (enemies may act in the middle of your choice). speed 0 skips the real-time wait.
  */
-import { Battle, xpToNext, heroStats, rollGroup, mulberry32, groupSeed } from "./easybattle-core.js";
+import { ATB, Battle, xpToNext, heroStats, rollGroup, mulberry32, groupSeed } from "./easybattle-core.js";
 
 const W = 480;
 const H = 270;
@@ -44,6 +49,7 @@ const TEXT = {
   who: { th: "ใช้กับใคร?", en: "Target?", ms: "Sasaran?" },
 };
 const BLUE = { fill: 0x2a3a9c, fill2: 0x3446b4, border: 0xf2f4ff, inner: 0x8a98e8, ink: 0x0d0906, sel: 0x5a6ef0, selText: 0xffe27a, text: 0xf7f8ff, muted: 0x8a90b8 };
+const TIME = { empty: 0x0e1420, fill: 0x23804a, full: 0xb03c1e, edge: 0x0d0906, waitText: 0xeef2ff };
 const CARD = { fill: 0x1c2436, border: 0x6a7aa8, active: 0xffd23a, activeFill: 0x2c3a5c, life: 0x5ad06a, lifeLow: 0xe8c040, lifeCrit: 0xe0503a, pow: 0x4aa0f0, ready: 0xffe27a, wait: 0xa8b0c8, down: 0xe06a5a, lv: 0x0d0906 };
 const fmt = (s, ...a) => s.replace(/\{(\d)\}/g, (_, i) => String(a[Number(i)]));
 const TERRAIN = { forest: [0x2e4a3a, 0x4c7a3a, 0x2f5a2a], mountain: [0x3a3a52, 0x6a6a7a, 0x4a4a5a], cave: [0x3a3a52, 0x6a6a7a, 0x4a4a5a], beach: [0x5aa8d8, 0xe8d8a0, 0xd8c890], water: [0x5aa8d8, 0xe8d8a0, 0xd8c890], road: [0x7ab8d8, 0xb8946a, 0xa07a52], town: [0x7ab8d8, 0xb8946a, 0xa07a52], grass: [0x7ab8e0, 0x79c48a, 0x5aa86a] };
@@ -128,8 +134,12 @@ class BattleUI {
     this.auto = !!opts.auto;
     this.used = {};
     this.state = "busy";
-    const full = { ...setup, party: setup.party?.length ? setup.party : res.db.heroes.slice(0, 3).map((h) => ({ id: h.id, level: 4 })), items: setup.items ?? opts.items ?? {} };
+    const timing = opts.timing ?? setup.timing ?? res.ui?.timing ?? "turn";
+    const atbMode = opts.atbMode ?? setup.atbMode ?? res.ui?.atbMode ?? "wait";
+    const full = { ...setup, timing, atbMode, party: setup.party?.length ? setup.party : res.db.heroes.slice(0, 3).map((h) => ({ id: h.id, level: 4 })), items: setup.items ?? opts.items ?? {} };
     this.engine = new Battle(this.db, full);
+    this.atb = this.engine.timing === "atb";
+    this.atbAcc = 0;
     this.setup = full;
     this.ef = res.ef ?? null;
     const ui = res.ui;
@@ -148,6 +158,11 @@ class BattleUI {
     this.build();
     app.stage.addChild(this.view);
     this.clock = (t) => {
+      if (this.view.destroyed) {
+        app.ticker.remove(this.clock);
+        window.removeEventListener("keydown", this.keys);
+        return;
+      }
       this.ms = (this.ms ?? 0) + t.deltaMS;
       this.bob(this.ms);
       this.atbTick?.(t.deltaMS);
@@ -444,16 +459,31 @@ class BattleUI {
       state.label = "state";
       lv.label = "lv";
       const bars = new P.Graphics();
-      c.addChild(bg, portrait, bars, lvBg, lv, life, lifeV, pow, powV, state);
+      const time = new P.Graphics();
+      time.label = "time";
+      c.addChild(bg, portrait, bars, time, lvBg, lv, life, lifeV, pow, powV, state);
       this.view.addChild(c);
-      return { i, R, c, bg, portrait, faces, lv, life, lifeV, pow, powV, state, bars };
+      return { i, R, c, bg, portrait, faces, lv, life, lifeV, pow, powV, state, bars, time };
     });
   }
 
   cardState(i) {
     const a = this.engine.actors[i];
     if (a.hp <= 0) return "down";
+    if (this.atb) return this.engine.ready().includes(i) ? "ready" : "wait";
     return i === this.turn ? "ready" : "wait";
+  }
+
+  /** ATB time bars: a stripe behind READY! / WAIT... that fills with the gauge (green), full = orange. */
+  drawTimeBars() {
+    if (!this.atb) return;
+    for (const k of this.cards ?? []) {
+      const r = k.R.time;
+      const a = this.engine.actors[k.i];
+      const v = a.hp > 0 ? Math.min(1, this.engine.gauge[k.i] / ATB.full) : 0;
+      k.time.clear().rect(r.x - 1, r.y - 1, r.w + 2, r.h + 2).fill(TIME.edge).rect(r.x, r.y, r.w, r.h).fill(TIME.empty);
+      if (v > 0) k.time.rect(r.x, r.y, Math.max(1, Math.round(r.w * v)), r.h).fill(v >= 1 ? TIME.full : TIME.fill);
+    }
   }
 
   refreshCards() {
@@ -461,7 +491,7 @@ class BattleUI {
       const { R } = k;
       const a = this.engine.actors[k.i];
       const st = this.cardState(k.i);
-      const active = st === "ready";
+      const active = this.atb ? k.i === this.turn : st === "ready";
       k.bg.clear().rect(R.rect.x, R.rect.y, R.rect.w, R.rect.h).fill(CARD.lv)
         .rect(R.rect.x + 1, R.rect.y + 1, R.rect.w - 2, R.rect.h - 2).fill(active ? CARD.active : CARD.border)
         .rect(R.rect.x + 2, R.rect.y + 2, R.rect.w - 4, R.rect.h - 4).fill(active ? CARD.activeFill : CARD.fill)
@@ -486,11 +516,12 @@ class BattleUI {
       bar(R.lifeBar, Math.max(0, ratio), lc);
       bar(R.powBar, a.max.mp ? a.mp / a.max.mp : 0, CARD.pow);
       this.setText(k.state, this.t(st));
-      k.state.tint = st === "ready" ? CARD.ready : st === "down" ? CARD.down : CARD.wait;
+      k.state.tint = st === "ready" ? CARD.ready : st === "down" ? CARD.down : this.atb ? TIME.waitText : CARD.wait;
       if (!k.state.__pixel) k.state.style.fill = k.state.tint;
       this.place(k.state, R.state.x + Math.round((R.state.w - this.textWidth(k.state)) / 2), R.state.y);
       k.c.alpha = 1;
     }
+    this.drawTimeBars();
   }
 
   refresh() {
@@ -598,13 +629,21 @@ class BattleUI {
   async next() {
     this.refresh();
     if (this.engine.over) return this.finish();
+    if (this.atb && this.speed > 0) {
+      // ATB: let time run (atbTick) until a gauge fills
+      this.turn = -1;
+      this.actor = undefined;
+      this.state = "time";
+      this.refresh();
+      return;
+    }
     const i = this.engine.current();
     if (i < 0) return this.finish();
     this.turn = this.engine.actors[i].side === 0 ? i : -1;
     this.refresh();
     if (this.engine.actors[i].side === 1 || this.auto) {
       await this.wait(0.25);
-      return this.run(this.engine.auto());
+      return this.run(this.engine.auto(), i);
     }
     this.actor = i;
     this.stepForward(i);
@@ -621,12 +660,81 @@ class BattleUI {
     sp.s.position.set(sp.home.x, sp.home.y);
   }
 
-  async run(action) {
+  async run(action, who = this.actor) {
     this.state = "busy";
     this.menuBox.visible = false;
     this.cursor.visible = false;
-    for (const ev of this.engine.act(action)) await this.show(ev);
+    for (const ev of this.engine.act(action, this.atb ? who : undefined)) await this.show(ev);
     this.refresh();
+    return this.next();
+  }
+
+  /** Engine calls that may log events (start-of-turn skips) → play them. */
+  async play(fn) {
+    const start = this.engine.log.length;
+    const r = fn();
+    for (const ev of this.engine.log.slice(start)) await this.show(ev);
+    return r;
+  }
+
+  /** ATB clock: called every frame. Time runs while waiting ("time"), and in menus unless atbMode is "wait". */
+  atbTick(ms) {
+    if (!this.atb || this.engine.over || this.speed <= 0) return;
+    const menu = ["command", "skills", "items", "target"].includes(this.state);
+    if (this.state !== "time" && !menu) return;
+    this.atbAcc += (ms / 1000) * ATB.stepsPerSecond * this.speed;
+    const n = Math.floor(this.atbAcc);
+    this.atbAcc -= n;
+    const before = this.engine.ready().join(",");
+    if (n > 0) this.engine.advance(Math.min(n, 30), menu);
+    if (this.engine.ready().join(",") !== before) this.refreshCards();
+    else this.drawTimeBars();
+    if (this.state === "time") this.atbDispatch();
+    else if (menu && this.engine.atbMode === "active") {
+      const e = this.engine.ready().find((i) => this.engine.actors[i].side === 1 || (this.auto && i !== this.actor));
+      if (e !== undefined) this.atbInterrupt(e);
+    }
+  }
+
+  /** ATB: the head of the ready queue acts — enemies (and heroes on auto) at once, heroes get their menu. */
+  async atbDispatch() {
+    this.state = "busy";
+    const i = await this.play(() => this.engine.readyActor());
+    if (this.engine.over) return this.finish();
+    if (i < 0) return this.next();
+    if (this.engine.actors[i].side === 1 || this.auto) {
+      this.turn = this.engine.actors[i].side === 0 ? i : -1;
+      this.refresh();
+      await this.wait(0.2);
+      return this.run(this.engine.auto(i), i);
+    }
+    this.actor = i;
+    this.turn = i;
+    this.refresh();
+    this.stepForward(i);
+    this.commands();
+  }
+
+  /** ATB active mode: an enemy whose gauge fills acts while a hero is choosing; the hero's menu comes back. */
+  async atbInterrupt(e) {
+    const hero = this.actor;
+    this.state = "busy";
+    this.menuBox.visible = false;
+    this.cursor.visible = false;
+    await this.wait(0.1);
+    await this.play(() => {
+      const action = this.engine.auto(e);
+      this.engine.act(action, e);
+    });
+    this.refresh();
+    if (this.engine.over) return this.finish();
+    if (hero !== undefined && this.engine.actors[hero].hp > 0 && this.engine.ready().includes(hero)) {
+      this.actor = hero;
+      this.turn = hero;
+      this.refresh();
+      return this.commands();
+    }
+    if (hero !== undefined) this.goHome(hero);
     return this.next();
   }
 
