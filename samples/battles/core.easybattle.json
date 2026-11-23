@@ -1,0 +1,878 @@
+{
+  "format": "easybattle/1",
+  "id": "core",
+  "name": {
+    "th": "ระบบต่อสู้หมู่บ้าน",
+    "en": "Village battle system",
+    "ms": "Sistem pertarungan kampung"
+  },
+  "rules": {
+    "maxLevel": 30,
+    "partySize": 3,
+    "xp": {
+      "base": 20,
+      "step": 12,
+      "quad": 3
+    },
+    "crit": 6,
+    "flee": 50,
+    "enemyScale": 8
+  },
+  "elements": [
+    {
+      "id": "fire",
+      "name": {
+        "th": "ไฟ",
+        "en": "Fire",
+        "ms": "Api"
+      },
+      "color": "#e8603c"
+    },
+    {
+      "id": "water",
+      "name": {
+        "th": "น้ำ",
+        "en": "Water",
+        "ms": "Air"
+      },
+      "color": "#3c8ce8"
+    },
+    {
+      "id": "earth",
+      "name": {
+        "th": "ดิน",
+        "en": "Earth",
+        "ms": "Tanah"
+      },
+      "color": "#a07a3c"
+    },
+    {
+      "id": "wind",
+      "name": {
+        "th": "ลม",
+        "en": "Wind",
+        "ms": "Angin"
+      },
+      "color": "#7fd3a0"
+    },
+    {
+      "id": "thunder",
+      "name": {
+        "th": "สายฟ้า",
+        "en": "Thunder",
+        "ms": "Petir"
+      },
+      "color": "#f4d03c"
+    }
+  ],
+  "statuses": [
+    {
+      "id": "poison",
+      "name": {
+        "th": "พิษ",
+        "en": "Poison",
+        "ms": "Racun"
+      },
+      "kind": "poison",
+      "amount": 8,
+      "turns": 3,
+      "color": "#9b59b6"
+    },
+    {
+      "id": "sleep",
+      "name": {
+        "th": "หลับ",
+        "en": "Sleep",
+        "ms": "Tidur"
+      },
+      "kind": "sleep",
+      "turns": 2,
+      "color": "#5d6d7e"
+    },
+    {
+      "id": "stun",
+      "name": {
+        "th": "มึนงง",
+        "en": "Stun",
+        "ms": "Pening"
+      },
+      "kind": "stun",
+      "turns": 1,
+      "color": "#f4d03c"
+    },
+    {
+      "id": "regen",
+      "name": {
+        "th": "ฟื้นฟู",
+        "en": "Regen",
+        "ms": "Pulih"
+      },
+      "kind": "regen",
+      "amount": 10,
+      "turns": 3,
+      "color": "#58d68d"
+    },
+    {
+      "id": "atk_up",
+      "name": {
+        "th": "พลังเพิ่ม",
+        "en": "Power up",
+        "ms": "Kuasa naik"
+      },
+      "kind": "atk",
+      "amount": 150,
+      "turns": 3,
+      "color": "#e74c3c"
+    },
+    {
+      "id": "def_up",
+      "name": {
+        "th": "ตั้งการ์ด",
+        "en": "Guard up",
+        "ms": "Kawal naik"
+      },
+      "kind": "def",
+      "amount": 150,
+      "turns": 3,
+      "color": "#3498db"
+    },
+    {
+      "id": "def_down",
+      "name": {
+        "th": "เกราะแตก",
+        "en": "Guard down",
+        "ms": "Kawal turun"
+      },
+      "kind": "def",
+      "amount": 70,
+      "turns": 3,
+      "color": "#7f8c8d"
+    },
+    {
+      "id": "slow",
+      "name": {
+        "th": "เชื่องช้า",
+        "en": "Slow",
+        "ms": "Lambat"
+      },
+      "kind": "spd",
+      "amount": 60,
+      "turns": 3,
+      "color": "#95a5a6"
+    }
+  ],
+  "skills": [
+    {
+      "id": "attack",
+      "name": {
+        "th": "โจมตี",
+        "en": "Attack",
+        "ms": "Serang"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 10,
+      "fx": "hit_sparks",
+      "sfx": "hit"
+    },
+    {
+      "id": "teep",
+      "name": {
+        "th": "ถีบ",
+        "en": "Push kick",
+        "ms": "Tendangan tolak"
+      },
+      "desc": {
+        "th": "ถีบมวยไทย ทำให้ศัตรูเสียการ์ด",
+        "en": "A Muay Thai push kick that breaks the guard",
+        "ms": "Tendangan Muay Thai yang memecah kawalan"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 12,
+      "mp": 3,
+      "status": {
+        "id": "def_down",
+        "chance": 60
+      },
+      "fx": "dust_puff",
+      "sfx": "hit"
+    },
+    {
+      "id": "elbow",
+      "name": {
+        "th": "ศอกกลับ",
+        "en": "Spinning elbow",
+        "ms": "Siku pusing"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 20,
+      "mp": 7,
+      "accuracy": 85,
+      "status": {
+        "id": "stun",
+        "chance": 30
+      },
+      "fx": "slash_arc",
+      "sfx": "hurt"
+    },
+    {
+      "id": "wai_khru",
+      "name": {
+        "th": "ตั้งสมาธิ",
+        "en": "Focus",
+        "ms": "Fokus"
+      },
+      "desc": {
+        "th": "ตั้งสมาธิก่อนชก พลังโจมตีเพิ่ม",
+        "en": "Steady the breath: attack up",
+        "ms": "Tenangkan nafas: serangan naik"
+      },
+      "kind": "buff",
+      "target": "self",
+      "mp": 4,
+      "status": {
+        "id": "atk_up"
+      },
+      "fx": "sparkle_shine",
+      "sfx": "powerup"
+    },
+    {
+      "id": "silat_strike",
+      "name": {
+        "th": "ซีละ",
+        "en": "Silat strike",
+        "ms": "Serangan silat"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 13,
+      "mp": 3,
+      "fx": "slash_arc",
+      "sfx": "hit"
+    },
+    {
+      "id": "jamu",
+      "name": {
+        "th": "ยาสมุนไพร",
+        "en": "Herbal jamu",
+        "ms": "Jamu herba"
+      },
+      "desc": {
+        "th": "ยาสมุนไพรรักษาพลังชีวิต",
+        "en": "A herbal tonic that restores HP",
+        "ms": "Tonik herba memulihkan HP"
+      },
+      "kind": "heal",
+      "target": "ally",
+      "power": 14,
+      "mp": 5,
+      "fx": "heal_plus",
+      "sfx": "powerup"
+    },
+    {
+      "id": "jamu_all",
+      "name": {
+        "th": "หม้อยาสมุนไพร",
+        "en": "Jamu pot",
+        "ms": "Periuk jamu"
+      },
+      "kind": "heal",
+      "target": "all_allies",
+      "power": 9,
+      "mp": 11,
+      "status": {
+        "id": "regen"
+      },
+      "fx": "heal_plus",
+      "sfx": "powerup"
+    },
+    {
+      "id": "cure",
+      "name": {
+        "th": "น้ำมะนาวแก้พิษ",
+        "en": "Lime remedy",
+        "ms": "Penawar limau"
+      },
+      "kind": "cure",
+      "target": "ally",
+      "mp": 3,
+      "cures": [],
+      "fx": "sparkle_shine",
+      "sfx": "select"
+    },
+    {
+      "id": "guard_stance",
+      "name": {
+        "th": "ตั้งท่าป้องกัน",
+        "en": "Guard stance",
+        "ms": "Kuda-kuda"
+      },
+      "kind": "buff",
+      "target": "all_allies",
+      "mp": 6,
+      "status": {
+        "id": "def_up"
+      },
+      "fx": "sparkle_shine",
+      "sfx": "powerup"
+    },
+    {
+      "id": "firecracker",
+      "name": {
+        "th": "ประทัด",
+        "en": "Firecracker",
+        "ms": "Mercun"
+      },
+      "desc": {
+        "th": "จุดประทัดใส่ศัตรูทุกตัว",
+        "en": "Firecrackers burst over every foe",
+        "ms": "Mercun meletup ke atas semua musuh"
+      },
+      "kind": "magic",
+      "target": "all_enemies",
+      "power": 9,
+      "mp": 6,
+      "element": "fire",
+      "fx": "explosion_small",
+      "sfx": "explosion"
+    },
+    {
+      "id": "kite_gust",
+      "name": {
+        "th": "ว่าวลมกรด",
+        "en": "Kite gust",
+        "ms": "Angin wau"
+      },
+      "kind": "magic",
+      "target": "enemy",
+      "power": 15,
+      "mp": 5,
+      "element": "wind",
+      "fx": "falling_leaves",
+      "sfx": "jump"
+    },
+    {
+      "id": "water_splash",
+      "name": {
+        "th": "สาดน้ำ",
+        "en": "Water splash",
+        "ms": "Simbah air"
+      },
+      "kind": "magic",
+      "target": "enemy",
+      "power": 14,
+      "mp": 5,
+      "element": "water",
+      "fx": "songkran_splash",
+      "sfx": "blip"
+    },
+    {
+      "id": "thunder_drum",
+      "name": {
+        "th": "กลองฟ้าร้อง",
+        "en": "Thunder drum",
+        "ms": "Gendang petir"
+      },
+      "kind": "magic",
+      "target": "all_enemies",
+      "power": 13,
+      "mp": 12,
+      "element": "thunder",
+      "status": {
+        "id": "stun",
+        "chance": 20
+      },
+      "fx": "magic_swirl",
+      "sfx": "explosion"
+    },
+    {
+      "id": "lullaby",
+      "name": {
+        "th": "เพลงกล่อม",
+        "en": "Lullaby",
+        "ms": "Dodoi"
+      },
+      "kind": "debuff",
+      "target": "enemy",
+      "mp": 4,
+      "accuracy": 100,
+      "status": {
+        "id": "sleep",
+        "chance": 70
+      },
+      "fx": "fireflies",
+      "sfx": "blip"
+    },
+    {
+      "id": "bite",
+      "name": {
+        "th": "กัด",
+        "en": "Bite",
+        "ms": "Gigit"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 11,
+      "fx": "hit_sparks",
+      "sfx": "hit"
+    },
+    {
+      "id": "claw",
+      "name": {
+        "th": "ข่วน",
+        "en": "Claw",
+        "ms": "Cakar"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 12,
+      "fx": "slash_arc",
+      "sfx": "hit"
+    },
+    {
+      "id": "pinch",
+      "name": {
+        "th": "หนีบ",
+        "en": "Pinch",
+        "ms": "Sepit"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 11,
+      "status": {
+        "id": "def_down",
+        "chance": 25
+      },
+      "fx": "hit_sparks",
+      "sfx": "hit"
+    },
+    {
+      "id": "sting",
+      "name": {
+        "th": "ต่อย",
+        "en": "Sting",
+        "ms": "Sengat"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 8,
+      "status": {
+        "id": "poison",
+        "chance": 45
+      },
+      "fx": "hit_sparks",
+      "sfx": "hurt"
+    },
+    {
+      "id": "venom_spit",
+      "name": {
+        "th": "พ่นพิษ",
+        "en": "Venom spit",
+        "ms": "Ludah bisa"
+      },
+      "kind": "magic",
+      "target": "enemy",
+      "power": 10,
+      "mp": 3,
+      "element": "earth",
+      "status": {
+        "id": "poison",
+        "chance": 70
+      },
+      "fx": "smoke",
+      "sfx": "hurt"
+    },
+    {
+      "id": "steal_snack",
+      "name": {
+        "th": "ฉกขนม",
+        "en": "Snack grab",
+        "ms": "Rampas kudapan"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 7,
+      "accuracy": 100,
+      "status": {
+        "id": "slow",
+        "chance": 40
+      },
+      "fx": "dust_puff",
+      "sfx": "jump"
+    },
+    {
+      "id": "charge",
+      "name": {
+        "th": "พุ่งชน",
+        "en": "Charge",
+        "ms": "Rempuh"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 17,
+      "accuracy": 80,
+      "status": {
+        "id": "stun",
+        "chance": 20
+      },
+      "fx": "dust_puff",
+      "sfx": "explosion"
+    },
+    {
+      "id": "screech",
+      "name": {
+        "th": "ร้องแสบหู",
+        "en": "Screech",
+        "ms": "Pekik"
+      },
+      "kind": "debuff",
+      "target": "all_enemies",
+      "mp": 3,
+      "status": {
+        "id": "def_down",
+        "chance": 60
+      },
+      "fx": "magic_swirl",
+      "sfx": "hurt"
+    },
+    {
+      "id": "mud_throw",
+      "name": {
+        "th": "ปาโคลน",
+        "en": "Mud throw",
+        "ms": "Baling lumpur"
+      },
+      "kind": "magic",
+      "target": "enemy",
+      "power": 10,
+      "element": "earth",
+      "status": {
+        "id": "slow",
+        "chance": 40
+      },
+      "fx": "dust_puff",
+      "sfx": "hit"
+    },
+    {
+      "id": "tail_sweep",
+      "name": {
+        "th": "ฟาดหาง",
+        "en": "Tail sweep",
+        "ms": "Libas ekor"
+      },
+      "kind": "physical",
+      "target": "all_enemies",
+      "power": 10,
+      "mp": 4,
+      "fx": "water_splash",
+      "sfx": "explosion"
+    },
+    {
+      "id": "roar",
+      "name": {
+        "th": "คำราม",
+        "en": "Roar",
+        "ms": "Ngaum"
+      },
+      "kind": "debuff",
+      "target": "all_enemies",
+      "mp": 5,
+      "status": {
+        "id": "slow",
+        "chance": 70
+      },
+      "fx": "dust_puff",
+      "sfx": "explosion"
+    },
+    {
+      "id": "pounce",
+      "name": {
+        "th": "กระโจน",
+        "en": "Pounce",
+        "ms": "Terkam"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 22,
+      "mp": 4,
+      "accuracy": 85,
+      "fx": "slash_arc",
+      "sfx": "hurt"
+    },
+    {
+      "id": "kite_dive",
+      "name": {
+        "th": "ว่าวโฉบ",
+        "en": "Kite dive",
+        "ms": "Wau menjunam"
+      },
+      "kind": "magic",
+      "target": "enemy",
+      "power": 12,
+      "element": "wind",
+      "fx": "falling_leaves",
+      "sfx": "jump"
+    }
+  ],
+  "heroes": [
+    {
+      "id": "ton",
+      "name": {
+        "th": "ต้น",
+        "en": "Ton",
+        "ms": "Ton"
+      },
+      "role": {
+        "th": "นักมวยไทย",
+        "en": "Muay Thai fighter",
+        "ms": "Peninju Muay Thai"
+      },
+      "base": {
+        "hp": 46,
+        "mp": 12,
+        "atk": 14,
+        "def": 9,
+        "mag": 5,
+        "res": 6,
+        "spd": 10
+      },
+      "growth": {
+        "hp": 7,
+        "mp": 1.5,
+        "atk": 2.2,
+        "def": 1.4,
+        "mag": 0.5,
+        "res": 0.8,
+        "spd": 1.1
+      },
+      "skills": [
+        {
+          "level": 1,
+          "skill": "teep"
+        },
+        {
+          "level": 3,
+          "skill": "wai_khru"
+        },
+        {
+          "level": 6,
+          "skill": "elbow"
+        }
+      ],
+      "weak": [
+        "water"
+      ],
+      "sprite": "ton",
+      "portrait": "ton",
+      "color": "#f4ae3d"
+    },
+    {
+      "id": "nurul",
+      "name": {
+        "th": "นูรุล",
+        "en": "Nurul",
+        "ms": "Nurul"
+      },
+      "role": {
+        "th": "นักสีลัตและหมอยาสมุนไพร",
+        "en": "Silat & herbalist",
+        "ms": "Pesilat & ahli herba"
+      },
+      "base": {
+        "hp": 40,
+        "mp": 20,
+        "atk": 10,
+        "def": 8,
+        "mag": 11,
+        "res": 10,
+        "spd": 11
+      },
+      "growth": {
+        "hp": 5.5,
+        "mp": 2.5,
+        "atk": 1.4,
+        "def": 1.1,
+        "mag": 1.8,
+        "res": 1.5,
+        "spd": 1.2
+      },
+      "skills": [
+        {
+          "level": 1,
+          "skill": "jamu"
+        },
+        {
+          "level": 1,
+          "skill": "silat_strike"
+        },
+        {
+          "level": 3,
+          "skill": "cure"
+        },
+        {
+          "level": 5,
+          "skill": "guard_stance"
+        },
+        {
+          "level": 8,
+          "skill": "jamu_all"
+        }
+      ],
+      "resist": [
+        "water"
+      ],
+      "sprite": "nurul",
+      "portrait": "nurul",
+      "color": "#2f7a6a"
+    },
+    {
+      "id": "mei",
+      "name": {
+        "th": "เหม่ย",
+        "en": "Mei",
+        "ms": "Mei"
+      },
+      "role": {
+        "th": "นักเล่นว่าวและประทัด",
+        "en": "Kite & firecracker artist",
+        "ms": "Pemain wau & mercun"
+      },
+      "base": {
+        "hp": 34,
+        "mp": 24,
+        "atk": 7,
+        "def": 6,
+        "mag": 14,
+        "res": 9,
+        "spd": 12
+      },
+      "growth": {
+        "hp": 4.5,
+        "mp": 3,
+        "atk": 0.8,
+        "def": 0.9,
+        "mag": 2.3,
+        "res": 1.3,
+        "spd": 1.3
+      },
+      "skills": [
+        {
+          "level": 1,
+          "skill": "firecracker"
+        },
+        {
+          "level": 1,
+          "skill": "kite_gust"
+        },
+        {
+          "level": 4,
+          "skill": "water_splash"
+        },
+        {
+          "level": 5,
+          "skill": "lullaby"
+        },
+        {
+          "level": 9,
+          "skill": "thunder_drum"
+        }
+      ],
+      "weak": [
+        "earth"
+      ],
+      "sprite": "mei",
+      "portrait": "mei",
+      "color": "#c8402e"
+    },
+    {
+      "id": "adam",
+      "name": {
+        "th": "อาดัม",
+        "en": "Adam",
+        "ms": "Adam"
+      },
+      "role": {
+        "th": "ชาวประมงถือไม้พาย",
+        "en": "Fisher with an oar",
+        "ms": "Nelayan berdayung"
+      },
+      "base": {
+        "hp": 52,
+        "mp": 10,
+        "atk": 12,
+        "def": 12,
+        "mag": 6,
+        "res": 7,
+        "spd": 8
+      },
+      "growth": {
+        "hp": 7.5,
+        "mp": 1,
+        "atk": 1.8,
+        "def": 1.8,
+        "mag": 0.6,
+        "res": 0.9,
+        "spd": 0.8
+      },
+      "skills": [
+        {
+          "level": 1,
+          "skill": "water_splash"
+        },
+        {
+          "level": 4,
+          "skill": "guard_stance"
+        },
+        {
+          "level": 7,
+          "skill": "charge"
+        }
+      ],
+      "resist": [
+        "water"
+      ],
+      "weak": [
+        "thunder"
+      ],
+      "sprite": "adam",
+      "portrait": "adam",
+      "color": "#3c8ce8"
+    }
+  ],
+  "items": [
+    {
+      "item": "balm",
+      "hp": 40,
+      "target": "ally"
+    },
+    {
+      "item": "teh_tarik",
+      "mp": 15,
+      "target": "ally"
+    },
+    {
+      "item": "kurma",
+      "hp": 25,
+      "mp": 5,
+      "target": "ally"
+    },
+    {
+      "item": "thai_tea",
+      "mp": 10,
+      "target": "ally"
+    },
+    {
+      "item": "ketupat",
+      "hp": 60,
+      "target": "ally"
+    },
+    {
+      "item": "bubur",
+      "hp": 20,
+      "cures": [],
+      "target": "ally"
+    }
+  ]
+}

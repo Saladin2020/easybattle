@@ -1,0 +1,66 @@
+{
+  "format": "easysprite.native",
+  "view": "side",
+  "frameSize": 48,
+  "columns": 30,
+  "rows": 3,
+  "directions": [
+    "right",
+    "left",
+    "front"
+  ],
+  "frames": [
+    "idle",
+    "walk0",
+    "walk1",
+    "walk2",
+    "run0",
+    "run1",
+    "run2",
+    "run3",
+    "jump0",
+    "jump1",
+    "wave0",
+    "wave1",
+    "carry0",
+    "carry1",
+    "farm0",
+    "farm1",
+    "cheer0",
+    "cheer1",
+    "attack0",
+    "attack1",
+    "hurt0",
+    "hurt1",
+    "fall0",
+    "fall1",
+    "sleep0",
+    "sleep1",
+    "tired0",
+    "tired1",
+    "sit",
+    "crouch"
+  ],
+  "project": {
+    "id": "side_little_boy",
+    "name": "Little Boy · Side",
+    "view": "side",
+    "selections": {
+      "body": "side_body_child_deep",
+      "face": "side_face_smile",
+      "hair_front": "side_hair_crop_front",
+      "shirt": "side_shirt_tank",
+      "pants": "side_pants_shorts",
+      "shoes": "side_shoes_sneakers",
+      "hair_back": "side_hair_crop_back"
+    },
+    "colors": {
+      "body": "#8a5a3c",
+      "hair_front": "#2a221c",
+      "shirt": "#4f86c6",
+      "pants": "#c48a3a",
+      "shoes": "#3f7d4e",
+      "hair_back": "#2a221c"
+    }
+  }
+}

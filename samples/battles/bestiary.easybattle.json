@@ -1,0 +1,881 @@
+{
+  "format": "easybattle/1",
+  "id": "bestiary",
+  "name": {
+    "th": "สัตว์ป่าและผู้ร้าย",
+    "en": "Wild creatures and rogues",
+    "ms": "Makhluk liar dan penyangak"
+  },
+  "enemies": [
+    {
+      "id": "paddy_crab",
+      "name": {
+        "th": "ปูนา",
+        "en": "Paddy crab",
+        "ms": "Ketam sawah"
+      },
+      "level": 1,
+      "stats": {
+        "hp": 48,
+        "mp": 0,
+        "atk": 11,
+        "def": 12,
+        "mag": 2,
+        "res": 4,
+        "spd": 5
+      },
+      "skills": [
+        {
+          "skill": "pinch",
+          "weight": 3
+        },
+        {
+          "skill": "attack",
+          "weight": 1
+        }
+      ],
+      "xp": 6,
+      "coins": 4,
+      "art": "crab",
+      "weak": [
+        "thunder"
+      ],
+      "resist": [
+        "water"
+      ],
+      "drops": [
+        {
+          "item": "egg",
+          "chance": 20
+        }
+      ]
+    },
+    {
+      "id": "giant_mosquito",
+      "name": {
+        "th": "ยุงยักษ์",
+        "en": "Giant mosquito",
+        "ms": "Nyamuk gergasi"
+      },
+      "level": 1,
+      "stats": {
+        "hp": 31,
+        "mp": 6,
+        "atk": 10,
+        "def": 3,
+        "mag": 5,
+        "res": 3,
+        "spd": 14
+      },
+      "skills": [
+        {
+          "skill": "sting",
+          "weight": 3
+        },
+        {
+          "skill": "attack",
+          "weight": 1
+        }
+      ],
+      "xp": 5,
+      "coins": 3,
+      "art": "mosquito",
+      "weak": [
+        "fire",
+        "wind"
+      ],
+      "drops": [
+        {
+          "item": "balm",
+          "chance": 10
+        }
+      ]
+    },
+    {
+      "id": "monkey_thief",
+      "name": {
+        "th": "ลิงขโมยขนม",
+        "en": "Snack-thief monkey",
+        "ms": "Monyet pencuri"
+      },
+      "level": 2,
+      "stats": {
+        "hp": 57,
+        "mp": 4,
+        "atk": 12,
+        "def": 6,
+        "mag": 4,
+        "res": 5,
+        "spd": 13
+      },
+      "skills": [
+        {
+          "skill": "steal_snack",
+          "weight": 2
+        },
+        {
+          "skill": "claw",
+          "weight": 2
+        },
+        {
+          "skill": "attack",
+          "weight": 1
+        }
+      ],
+      "xp": 9,
+      "coins": 9,
+      "art": "monkey",
+      "weak": [
+        "fire"
+      ],
+      "drops": [
+        {
+          "item": "banana",
+          "chance": 45
+        },
+        {
+          "item": "mango",
+          "chance": 15
+        }
+      ]
+    },
+    {
+      "id": "water_monitor",
+      "name": {
+        "th": "ตะกวดน้ำ",
+        "en": "Water monitor",
+        "ms": "Biawak"
+      },
+      "level": 3,
+      "stats": {
+        "hp": 88,
+        "mp": 4,
+        "atk": 16,
+        "def": 10,
+        "mag": 4,
+        "res": 6,
+        "spd": 7
+      },
+      "skills": [
+        {
+          "skill": "bite",
+          "weight": 3
+        },
+        {
+          "skill": "tail_sweep",
+          "weight": 1
+        }
+      ],
+      "xp": 14,
+      "coins": 10,
+      "art": "monitor",
+      "weak": [
+        "thunder"
+      ],
+      "resist": [
+        "water"
+      ],
+      "drops": [
+        {
+          "item": "pla_tu",
+          "chance": 15
+        }
+      ]
+    },
+    {
+      "id": "cobra",
+      "name": {
+        "th": "งูเห่า",
+        "en": "Cobra",
+        "ms": "Ular tedung"
+      },
+      "level": 3,
+      "stats": {
+        "hp": 66,
+        "mp": 10,
+        "atk": 13,
+        "def": 7,
+        "mag": 11,
+        "res": 8,
+        "spd": 12
+      },
+      "skills": [
+        {
+          "skill": "bite",
+          "weight": 2
+        },
+        {
+          "skill": "venom_spit",
+          "weight": 2
+        }
+      ],
+      "xp": 13,
+      "coins": 8,
+      "art": "cobra",
+      "weak": [
+        "fire"
+      ],
+      "resist": [
+        "earth"
+      ],
+      "drops": [
+        {
+          "item": "balm",
+          "chance": 20
+        }
+      ]
+    },
+    {
+      "id": "cave_bat",
+      "name": {
+        "th": "ค้างคาวถ้ำ",
+        "en": "Cave bat",
+        "ms": "Kelawar gua"
+      },
+      "level": 2,
+      "stats": {
+        "hp": 40,
+        "mp": 6,
+        "atk": 11,
+        "def": 4,
+        "mag": 6,
+        "res": 6,
+        "spd": 15
+      },
+      "skills": [
+        {
+          "skill": "bite",
+          "weight": 3
+        },
+        {
+          "skill": "screech",
+          "weight": 1
+        }
+      ],
+      "xp": 8,
+      "coins": 5,
+      "art": "bat",
+      "weak": [
+        "wind",
+        "fire"
+      ],
+      "drops": []
+    },
+    {
+      "id": "wild_boar",
+      "name": {
+        "th": "หมูป่า",
+        "en": "Wild boar",
+        "ms": "Babi hutan"
+      },
+      "level": 4,
+      "stats": {
+        "hp": 123,
+        "mp": 0,
+        "atk": 18,
+        "def": 12,
+        "mag": 2,
+        "res": 5,
+        "spd": 8
+      },
+      "skills": [
+        {
+          "skill": "charge",
+          "weight": 2
+        },
+        {
+          "skill": "attack",
+          "weight": 2
+        }
+      ],
+      "xp": 20,
+      "coins": 12,
+      "art": "boar",
+      "weak": [
+        "fire"
+      ],
+      "drops": []
+    },
+    {
+      "id": "fighting_rooster",
+      "name": {
+        "th": "ไก่ชนดุ",
+        "en": "Fierce rooster",
+        "ms": "Ayam sabung garang"
+      },
+      "level": 2,
+      "stats": {
+        "hp": 53,
+        "mp": 0,
+        "atk": 14,
+        "def": 5,
+        "mag": 2,
+        "res": 4,
+        "spd": 14
+      },
+      "skills": [
+        {
+          "skill": "claw",
+          "weight": 3
+        },
+        {
+          "skill": "screech",
+          "weight": 1
+        }
+      ],
+      "xp": 9,
+      "coins": 7,
+      "art": "rooster",
+      "weak": [
+        "water"
+      ],
+      "drops": [
+        {
+          "item": "egg",
+          "chance": 40
+        }
+      ]
+    },
+    {
+      "id": "scorpion",
+      "name": {
+        "th": "แมงป่องช้าง",
+        "en": "Giant scorpion",
+        "ms": "Kala jengking"
+      },
+      "level": 3,
+      "stats": {
+        "hp": 70,
+        "mp": 0,
+        "atk": 14,
+        "def": 13,
+        "mag": 2,
+        "res": 5,
+        "spd": 9
+      },
+      "skills": [
+        {
+          "skill": "sting",
+          "weight": 3
+        },
+        {
+          "skill": "pinch",
+          "weight": 1
+        }
+      ],
+      "xp": 13,
+      "coins": 9,
+      "art": "scorpion",
+      "weak": [
+        "water"
+      ],
+      "resist": [
+        "earth"
+      ],
+      "drops": []
+    },
+    {
+      "id": "road_bandit",
+      "name": {
+        "th": "โจรดักทาง",
+        "en": "Road bandit",
+        "ms": "Penyamun jalan"
+      },
+      "level": 4,
+      "stats": {
+        "hp": 106,
+        "mp": 8,
+        "atk": 17,
+        "def": 10,
+        "mag": 7,
+        "res": 7,
+        "spd": 11
+      },
+      "skills": [
+        {
+          "skill": "attack",
+          "weight": 2
+        },
+        {
+          "skill": "steal_snack",
+          "weight": 1
+        },
+        {
+          "skill": "charge",
+          "weight": 1
+        }
+      ],
+      "xp": 22,
+      "coins": 30,
+      "art": "bandit",
+      "drops": [
+        {
+          "item": "coin_pouch_gift",
+          "chance": 5
+        }
+      ],
+      "loot": "delivery_tip"
+    },
+    {
+      "id": "mud_blob",
+      "name": {
+        "th": "ก้อนโคลนดุ๊กดิ๊ก",
+        "en": "Mud blob",
+        "ms": "Gumpal lumpur"
+      },
+      "level": 1,
+      "stats": {
+        "hp": 44,
+        "mp": 4,
+        "atk": 8,
+        "def": 8,
+        "mag": 7,
+        "res": 6,
+        "spd": 6
+      },
+      "skills": [
+        {
+          "skill": "mud_throw",
+          "weight": 3
+        },
+        {
+          "skill": "attack",
+          "weight": 1
+        }
+      ],
+      "xp": 6,
+      "coins": 4,
+      "art": "mud",
+      "weak": [
+        "water",
+        "wind"
+      ],
+      "resist": [
+        "earth"
+      ],
+      "immune": [
+        "thunder"
+      ],
+      "drops": []
+    },
+    {
+      "id": "runaway_kite",
+      "name": {
+        "th": "ว่าวหลุดลม",
+        "en": "Runaway kite",
+        "ms": "Wau terlepas"
+      },
+      "level": 3,
+      "stats": {
+        "hp": 57,
+        "mp": 12,
+        "atk": 10,
+        "def": 6,
+        "mag": 14,
+        "res": 10,
+        "spd": 16
+      },
+      "skills": [
+        {
+          "skill": "kite_dive",
+          "weight": 3
+        },
+        {
+          "skill": "attack",
+          "weight": 1
+        }
+      ],
+      "xp": 12,
+      "coins": 8,
+      "art": "kite",
+      "weak": [
+        "fire"
+      ],
+      "resist": [
+        "wind"
+      ],
+      "drops": [
+        {
+          "item": "khom_loi",
+          "chance": 0
+        }
+      ]
+    },
+    {
+      "id": "river_crocodile",
+      "name": {
+        "th": "จระเข้ปากแม่น้ำ",
+        "en": "River-mouth crocodile",
+        "ms": "Buaya kuala"
+      },
+      "level": 8,
+      "stats": {
+        "hp": 792,
+        "mp": 20,
+        "atk": 30,
+        "def": 18,
+        "mag": 10,
+        "res": 12,
+        "spd": 9
+      },
+      "skills": [
+        {
+          "skill": "bite",
+          "weight": 3
+        },
+        {
+          "skill": "tail_sweep",
+          "weight": 2
+        },
+        {
+          "skill": "roar",
+          "weight": 1
+        }
+      ],
+      "xp": 120,
+      "coins": 90,
+      "art": "crocodile",
+      "boss": true,
+      "weak": [
+        "thunder"
+      ],
+      "resist": [
+        "water"
+      ],
+      "drops": [
+        {
+          "item": "ketupat",
+          "chance": 100,
+          "n": 2
+        }
+      ]
+    },
+    {
+      "id": "highland_tiger",
+      "name": {
+        "th": "เสือโคร่งภูเขา",
+        "en": "Highland tiger",
+        "ms": "Harimau tanah tinggi"
+      },
+      "level": 10,
+      "stats": {
+        "hp": 936,
+        "mp": 24,
+        "atk": 35,
+        "def": 16,
+        "mag": 12,
+        "res": 14,
+        "spd": 15
+      },
+      "skills": [
+        {
+          "skill": "pounce",
+          "weight": 3
+        },
+        {
+          "skill": "claw",
+          "weight": 2
+        },
+        {
+          "skill": "roar",
+          "weight": 1
+        }
+      ],
+      "xp": 180,
+      "coins": 120,
+      "art": "tiger",
+      "boss": true,
+      "weak": [
+        "fire"
+      ],
+      "drops": [
+        {
+          "item": "kurma",
+          "chance": 100,
+          "n": 3
+        }
+      ]
+    }
+  ],
+  "encounters": [
+    {
+      "id": "plains_fields",
+      "name": {
+        "th": "ทุ่งนาภาคกลาง",
+        "en": "Central rice fields",
+        "ms": "Sawah tengah"
+      },
+      "cultures": [
+        "thai"
+      ],
+      "terrains": [
+        "grass",
+        "field",
+        "road"
+      ],
+      "rate": 28,
+      "groups": [
+        {
+          "enemies": [
+            "paddy_crab",
+            "paddy_crab"
+          ],
+          "weight": 4
+        },
+        {
+          "enemies": [
+            "giant_mosquito",
+            "paddy_crab"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "fighting_rooster",
+            "giant_mosquito"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "mud_blob",
+            "mud_blob",
+            "giant_mosquito"
+          ],
+          "weight": 2
+        }
+      ],
+      "music": "market_chase"
+    },
+    {
+      "id": "plains_forest",
+      "cultures": [
+        "thai",
+        "rural"
+      ],
+      "terrains": [
+        "forest"
+      ],
+      "rate": 22,
+      "groups": [
+        {
+          "enemies": [
+            "monkey_thief",
+            "monkey_thief"
+          ],
+          "weight": 4
+        },
+        {
+          "enemies": [
+            "cobra"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "wild_boar"
+          ],
+          "weight": 1,
+          "levelBonus": 0
+        }
+      ]
+    },
+    {
+      "id": "kampung_coast",
+      "name": {
+        "th": "ชายฝั่งกัมปง",
+        "en": "Kampung coast",
+        "ms": "Pantai kampung"
+      },
+      "cultures": [
+        "malay"
+      ],
+      "terrains": [
+        "grass",
+        "beach",
+        "field",
+        "road",
+        "water"
+      ],
+      "rate": 26,
+      "groups": [
+        {
+          "enemies": [
+            "paddy_crab",
+            "paddy_crab",
+            "paddy_crab"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "water_monitor"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "monkey_thief",
+            "giant_mosquito"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "runaway_kite",
+            "runaway_kite"
+          ],
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "kampung_forest",
+      "cultures": [
+        "malay"
+      ],
+      "terrains": [
+        "forest",
+        "mountain"
+      ],
+      "rate": 22,
+      "groups": [
+        {
+          "enemies": [
+            "cobra",
+            "monkey_thief"
+          ],
+          "weight": 3,
+          "levelBonus": 1
+        },
+        {
+          "enemies": [
+            "water_monitor",
+            "cobra"
+          ],
+          "weight": 2,
+          "levelBonus": 1
+        }
+      ]
+    },
+    {
+      "id": "river_quarter",
+      "name": {
+        "th": "ย่านปากแม่น้ำ",
+        "en": "River-mouth quarter",
+        "ms": "Kawasan kuala"
+      },
+      "cultures": [
+        "chinese",
+        "city"
+      ],
+      "terrains": [
+        "grass",
+        "road",
+        "field",
+        "beach",
+        "water"
+      ],
+      "rate": 30,
+      "groups": [
+        {
+          "enemies": [
+            "road_bandit"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "cave_bat",
+            "cave_bat"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "mud_blob",
+            "fighting_rooster"
+          ],
+          "weight": 2
+        },
+        {
+          "enemies": [
+            "runaway_kite",
+            "cave_bat"
+          ],
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "highlands",
+      "name": {
+        "th": "ที่ราบสูง",
+        "en": "Highlands",
+        "ms": "Tanah tinggi"
+      },
+      "cultures": [
+        "rural"
+      ],
+      "terrains": [
+        "grass",
+        "mountain",
+        "field",
+        "road",
+        "cave"
+      ],
+      "rate": 20,
+      "groups": [
+        {
+          "enemies": [
+            "wild_boar"
+          ],
+          "weight": 3,
+          "levelBonus": 1
+        },
+        {
+          "enemies": [
+            "scorpion",
+            "cave_bat"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "cobra",
+            "scorpion"
+          ],
+          "weight": 2,
+          "levelBonus": 1
+        }
+      ]
+    },
+    {
+      "id": "anywhere",
+      "name": {
+        "th": "ทั่วไป",
+        "en": "Anywhere",
+        "ms": "Di mana-mana"
+      },
+      "terrains": [
+        "any"
+      ],
+      "rate": 32,
+      "groups": [
+        {
+          "enemies": [
+            "mud_blob"
+          ],
+          "weight": 3
+        },
+        {
+          "enemies": [
+            "giant_mosquito",
+            "giant_mosquito"
+          ],
+          "weight": 2
+        }
+      ]
+    }
+  ]
+}

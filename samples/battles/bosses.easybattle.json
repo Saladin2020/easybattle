@@ -1,0 +1,55 @@
+{
+  "format": "easybattle/1",
+  "id": "bosses",
+  "encounters": [
+    {
+      "id": "boss_crocodile",
+      "name": {
+        "th": "จระเข้ปากแม่น้ำ",
+        "en": "River-mouth crocodile",
+        "ms": "Buaya kuala"
+      },
+      "terrains": [
+        "water"
+      ],
+      "cultures": [
+        "malay"
+      ],
+      "rate": 9999,
+      "scripted": true,
+      "groups": [
+        {
+          "enemies": [
+            "river_crocodile"
+          ],
+          "weight": 1
+        }
+      ],
+      "music": "market_chase"
+    },
+    {
+      "id": "boss_tiger",
+      "name": {
+        "th": "เสือโคร่งภูเขา",
+        "en": "Highland tiger",
+        "ms": "Harimau tanah tinggi"
+      },
+      "terrains": [
+        "cave"
+      ],
+      "cultures": [
+        "rural"
+      ],
+      "rate": 9999,
+      "scripted": true,
+      "groups": [
+        {
+          "enemies": [
+            "highland_tiger"
+          ],
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

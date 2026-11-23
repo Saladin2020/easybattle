@@ -1,0 +1,46 @@
+{
+  "format": "easytilemap-overworld-regions/1",
+  "note": "regions excerpt of an Easy Tilemap overworld export (for tests and bind-overworld examples)",
+  "regions": [
+    {
+      "id": "river_mouth_quarter",
+      "name": {
+        "th": "ย่านปากแม่น้ำ",
+        "en": "River Mouth Quarter",
+        "ms": "Kawasan Kuala"
+      },
+      "culture": "chinese",
+      "color": "#c8402e"
+    },
+    {
+      "id": "central_plains",
+      "name": {
+        "th": "ที่ราบภาคกลาง",
+        "en": "Central Plains",
+        "ms": "Dataran Tengah"
+      },
+      "culture": "thai",
+      "color": "#e2b54a"
+    },
+    {
+      "id": "highlands",
+      "name": {
+        "th": "ที่ราบสูง",
+        "en": "Highlands",
+        "ms": "Tanah Tinggi"
+      },
+      "culture": "rural",
+      "color": "#8a6a2a"
+    },
+    {
+      "id": "east_coast",
+      "name": {
+        "th": "ชายฝั่งตะวันออก",
+        "en": "East Coast",
+        "ms": "Pantai Timur"
+      },
+      "culture": "malay",
+      "color": "#2a8a5c"
+    }
+  ]
+}
