@@ -156,7 +156,7 @@ const LAYOUT_TH: Record<string, string> = { classic: "มุมข้าง (cla
 function Screen({ ws, onSaved }: { ws: Summary; onSaved: () => void }) {
   const [ui, setUi] = useState(ws.ui ?? { layout: "classic", status: "rows", backdrop: "auto" });
   const [table, setTable] = useState("");
-  const [doc, setDoc] = useState(ws.docs[0] ?? "core");
+  const [doc, setDoc] = useState(ws.docs.includes("core") ? "core" : ws.docs[0] ?? "core");
   const [msg, setMsg] = useState("");
   const statuses = ui.layout === "backview" ? ["cards", "none"] : ["rows", "cards", "none"];
   const set = (k: "layout" | "status" | "backdrop", v: string) => {

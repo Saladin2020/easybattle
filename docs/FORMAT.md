@@ -34,10 +34,29 @@ unique across documents (`check` names both files on a clash). Every display nam
 | element | `id`, `name`, `color` (`#rrggbb`) |
 | status | `id`, `name`, `kind` (`poison` · `regen` · `sleep` · `stun` · `atk` · `def` · `mag` · `spd`), `amount` (poison / regen: % of max HP per turn; stat kinds: multiplier %, e.g. 130 or 70), `turns`, `color?` |
 | skill | `id`, `name`, `desc?`, `kind` (`physical` · `magic` · `heal` · `buff` · `debuff` · `cure`), `target` (`enemy` · `all_enemies` · `self` · `ally` · `all_allies`), `power?` (10 = plain attack), `mp?`, `element?`, `accuracy?` (0–100, default 95), `status? { id, chance? }`, `cures? [status ids]`, `fx?` (Easy FX preset), `sfx?` (Easy SFX sound) |
-| hero | `id`, `name`, `role?`, `base` (hp, mp, atk, def, mag, res, spd), `growth` (per level, fractions allowed; stats are floored), `skills [{ level, skill }]`, `weak?`, `resist?`, `sprite?` (Easy Sprite side-view sheet id), `portrait?`, `color?` |
-| enemy | `id`, `name`, `level`, `stats`, `skills [{ skill, weight }]`, `weak?`, `resist?`, `immune?`, `xp`, `coins`, `drops? [{ item, chance %, n? }]`, `loot?` (Easy Items loot table), `art` (built-in art: monkey, crab, mosquito, monitor, cobra, bat, boar, rooster, scorpion, bandit, mud, crocodile, tiger, kite), `palette?` (3 colours), `boss?` |
+| hero | `id`, `name`, `role?`, `base` (hp, mp, atk, def, mag, res, spd), `growth` (per level, fractions allowed; stats are floored), `skills [{ level, skill }]`, `weak?`, `resist?`, `sprite?` (Easy Sprite side-view sheet id), `back?` (Easy Sprite top-down sheet id for the back view, default `<id>_back`), `portrait?` (Easy Portrait strip id: neutral, happy, worried, sad), `color?` |
+| enemy | `id`, `name`, `level`, `stats`, `skills [{ skill, weight }]`, `weak?`, `resist?`, `immune?`, `xp`, `coins`, `drops? [{ item, chance %, n? }]`, `loot?` (Easy Items loot table), `art` (built-in art: monkey, crab, mosquito, monitor, cobra, bat, boar, rooster, scorpion, bandit, mud, crocodile, tiger, kite, snail, rat, scarecrow), `palette?` (3 colours), `boss?` |
 | encounter | `id`, `name?`, `regions?` (Easy Tilemap overworld region ids), `cultures?` (thai · malay · chinese · rural · city · any), `terrains` (any · grass · forest · mountain · field · road · beach · water · town · cave), `rate` (average steps between fights), `groups [{ enemies (1–5 ids), weight, levelBonus? }]`, `music?`, `background?`, `scripted?` |
 | item | `item` (Easy Items id), `hp?`, `mp?`, `cures?`, `target?` (`ally` · `all_allies`) |
+| ui | one object per document (later documents win): `layout?` (`classic` · `backview`), `status?` (`rows` · `cards` · `none`; `backview` + `rows` becomes `cards` with a warning), `backdrop?` (`auto` · `paddy` · `forest`) |
+
+### Battle screen
+
+```json
+{ "format": "easybattle/1", "id": "screen", "ui": { "layout": "backview", "status": "cards", "backdrop": "auto" } }
+```
+
+* **classic** — side view (enemies left, party right), message bar on top; `rows` shows the HP / MP panel, `cards`
+  the status cards along the bottom with the command list under the message bar.
+* **backview** — a blue message window (rows: message, then a 3 × 2 command grid, paged past six entries),
+  enemies standing in one row on the backdrop (feet on the horizon), the party from behind at 2× with a curved HP
+  gauge each, and status cards at the bottom (`none` hides them).
+* **status cards** — Easy Portrait face (40 × 40 crop; worried at ≤ 30 % HP, sad when down, happy on a win), Lv,
+  LIFE (HP) and POW (MP) with bars and numbers (four heroes: numbers only), and READY! for the hero choosing a
+  command, WAIT... for everyone else, DOWN for fallen heroes. The highlighted card is the one that is READY!.
+
+Exports write `ui` into `easybattle.json` with the resolved settings, the rectangles for every layout × status ×
+party size (`ui.layouts["backview:cards"]["3"]`), the labels (`ui.text`, th / en / ms) and sheet rows / frames.
 
 Enemies placed above their base level gain `enemyScale` % stats per level and 10 % more XP and coins.
 `terrainCodes` maps Easy Tilemap overworld ground codes to terrains for `Battle.step()`.

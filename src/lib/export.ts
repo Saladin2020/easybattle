@@ -280,8 +280,14 @@ Serve this folder over HTTP (fetch needs it):  python3 -m http.server   then ope
   easybattle-pixi.js    loadBattle(PIXI, "easybattle.json") → { start(app, setup, opts), scripted(table, seed), party(level) }
   enemies/<art>.png     enemy strips: idle, idle (bob), hurt
   heroes/<id>.png       Easy Sprite side-view sheets (left row: idle, attack, hurt, KO, cheer)
+  heroes/<id>_back.png  Easy Sprite top-down sheets (back row) for the back-view layout
+  portraits/<id>.png    Easy Portrait busts for the status cards (neutral, happy, worried, sad)
+  backdrops/            back-view battlefields (paddy, forest)
   fx/ sfx/              Easy FX strips and Easy SFX sounds the skills use (when the tools were installed)
   fonts/                Kanit (SIL OFL 1.1) for Thai text
+  font/                 มะขาม 16 / 8 pixel fonts + Easy Font's Pixi loader (SIL OFL 1.1), when Easy Font is installed
+
+Layouts: index.html?layout=backview&status=cards (or start(app, setup, { layout, status, backdrop })).
 `);
 }
 
@@ -406,7 +412,11 @@ Open this folder in Godot 4.3+ and press F5 (pick an encounter), or copy easybat
                                battle_ended(result, rewards), to_dict()/from_dict() for Easy Save
   easybattle/battle_engine.gd  EasyBattleEngine: the deterministic engine (parity-tested with the TypeScript one)
   easybattle/battle_scene.*    the battle UI (uses res://easyui/themes/teak.tres when Easy UI is exported here)
-  easybattle/enemies, heroes   enemy strips and Easy Sprite side-view hero sheets
+  easybattle/enemies, heroes   enemy strips and Easy Sprite hero sheets (side view, and <id>_back for the back view)
+  easybattle/portraits         Easy Portrait busts for the status cards
+  easybattle/backdrops         back-view battlefields (paddy, forest)
+  easyfont/                    มะขาม pixel fonts + EasyFont autoload (when Easy Font is installed)
+Layouts: Battle.start(setup, parent, {"layout": "backview", "status": "cards"}) or easybattle.json "ui".
   easybattle/fx, sfx           Easy FX strips and Easy SFX sounds the skills use (when bundled)
   test_battle.gd               godot --headless --path . --script res://test_battle.gd   → prints OK
   capture.gd                   frame capture for previews (needs a renderer)
