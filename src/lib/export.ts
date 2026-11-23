@@ -305,6 +305,8 @@ function pixiDemo(db: BattleDb): string {
   <div id="bar">
       ${tables}
       <button data-lang="th">ไทย</button><button data-lang="en">EN</button><button data-lang="ms">BM</button>
+      <button data-layout="classic">Classic</button><button data-layout="backview">Backview</button>
+      <button data-status="rows">HP rows</button><button data-status="cards">Cards</button><button data-status="none">No status</button>
       <button id="auto">Auto</button>
   </div>
   <div id="stage"></div>
@@ -322,18 +324,21 @@ function pixiDemo(db: BattleDb): string {
     const eb = await loadBattle(PIXI, "easybattle.json");
     const q = new URLSearchParams(location.search);
     let lang = q.get("lang") ?? "th", table = q.get("table") ?? ${JSON.stringify(db.encounters[0]?.id ?? "")}, auto = q.has("auto"), ui = null;
+    let layout = q.get("layout") ?? eb.ui?.layout ?? "classic", status = q.get("status") ?? undefined;
     const level = Number(q.get("level") ?? 4), seed = Number(q.get("seed") ?? 7), speed = Number(q.get("speed") ?? 1);
     const start = () => {
       if (ui && !ui.view.destroyed) ui.view.destroy({ children: true });
       const setup = eb.scripted(table, seed);
       setup.party = eb.party(level);
       setup.items = { balm: 2, teh_tarik: 1, kurma: 2 };
-      ui = eb.start(app, setup, { lang, auto, speed, keep: true, onEnd: (r, rw) => { window.__battle.result = r; window.__battle.rewards = rw; } });
+      ui = eb.start(app, setup, { lang, auto, speed, keep: true, layout, status, onEnd: (r, rw) => { window.__battle.result = r; window.__battle.rewards = rw; } });
       window.__battle = { eb, ui, result: null, rewards: null };
-      document.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.table === table || b.dataset.lang === lang || (b.id === "auto" && auto)));
+      document.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.table === table || b.dataset.lang === lang || b.dataset.layout === ui.layout || b.dataset.status === ui.status || (b.id === "auto" && auto)));
     };
     document.querySelectorAll("[data-table]").forEach((b) => b.onclick = () => { table = b.dataset.table; start(); });
     document.querySelectorAll("[data-lang]").forEach((b) => b.onclick = () => { lang = b.dataset.lang; start(); });
+    document.querySelectorAll("[data-layout]").forEach((b) => b.onclick = () => { layout = b.dataset.layout; status = undefined; start(); });
+    document.querySelectorAll("[data-status]").forEach((b) => b.onclick = () => { status = b.dataset.status; start(); });
     document.getElementById("auto").onclick = () => { auto = !auto; start(); };
     start();
     window.__ready = true;
