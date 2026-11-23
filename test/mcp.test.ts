@@ -54,6 +54,9 @@ describe("MCP server", () => {
       const r = await client.callTool({ name: "render_battle", arguments: { what, scale: 1 } });
       expect((r.content as Array<{ type: string }>)[0]!.type).toBe("image");
     }
+    const bv = await client.callTool({ name: "render_battle", arguments: { what: "battle", scale: 1, layout: "backview", status: "cards", backdrop: "forest" } });
+    expect((bv.content as Array<{ type: string }>)[0]!.type).toBe("image");
+    expect(body(await client.callTool({ name: "write_battles", arguments: { id: "screen", doc: { format: "easybattle/1", ui: { layout: "sideways" } } } })).saved).toBe(false);
     const exp = body(await client.callTool({ name: "export_battle", arguments: { preset: "pixi", bundle: false } }));
     expect(exp.files).toBeGreaterThan(5);
   }, 60_000);
@@ -68,6 +71,13 @@ describe("web API", () => {
     expect(((await sim.json()) as { result: string }).result).toBe("win");
     const png = await app.request("http://127.0.0.1/api/enemy/cobra.png", { headers: { host: "127.0.0.1:8938" } });
     expect(png.headers.get("content-type")).toBe("image/png");
+    const prev = await app.request("http://127.0.0.1/api/render?layout=backview&status=cards&table=paddy_pests", { headers: { host: "127.0.0.1:8938" } });
+    expect(prev.headers.get("content-type")).toBe("image/png");
+    const h = { host: "127.0.0.1:8938", "content-type": "application/json", origin: "http://127.0.0.1:8938" };
+    const saved = (await (await app.request("http://127.0.0.1/api/ui", { method: "POST", headers: h, body: JSON.stringify({ doc: "screen", ui: { layout: "backview", status: "cards" } }) })).json()) as { ok: boolean };
+    expect(saved.ok).toBe(true);
+    const ws2 = (await (await app.request("http://127.0.0.1/api/workspace", { headers: { host: "127.0.0.1:8938" } })).json()) as { ui: { layout: string; status: string } };
+    expect(ws2.ui).toMatchObject({ layout: "backview", status: "cards" });
     const evil = await app.request("http://127.0.0.1/api/docs/x", { method: "POST", headers: { host: "127.0.0.1:8938", origin: "https://evil.example", "content-type": "application/json" }, body: "{}" });
     expect(evil.status).toBe(403);
   });

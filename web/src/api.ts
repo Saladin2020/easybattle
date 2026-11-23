@@ -14,6 +14,8 @@ export interface Summary {
   errors: Array<{ path: string; message: string }>;
   warnings: Array<{ path: string; message: string }>;
   exportPresets: string[];
+  ui: { layout: string; status: string; backdrop: string };
+  enums?: { layouts: string[]; status: string[]; backdrops: string[]; terrains: string[] };
 }
 export interface Actor { side: 0 | 1; id: string; name: Name; level: number; hp: number; mp: number; max: { hp: number; mp: number } }
 export interface SimResult { result: string; log: Array<Record<string, unknown> & { t: string }>; rewards: { xp: number; coins: number; drops: Array<{ item: string; n: number }>; levels: Array<{ id: string; from: number; to: number; learned: string[] }> }; actors: Actor[] }

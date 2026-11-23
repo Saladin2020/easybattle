@@ -16,9 +16,9 @@ const OW = path.resolve("samples/overworld/regions.json");
 
 cli("init");
 ok(["core", "bestiary", "bosses"].every((d) => existsSync(path.join(ws, "battles", `${d}.easybattle.json`))), "init copies the starter battles");
-ok(/4 heroes · 14 enemies · 27 skills/.test(cli("info")), "info");
+ok(/4 heroes · 17 enemies · 27 skills/.test(cli("info")), "info");
 const listed = JSON.parse(cli("list", "enemies", "--json")).enemies;
-ok(listed.length === 14 && listed.some((e) => e.id === "river_crocodile" && e.boss), "list enemies");
+ok(listed.length === 17 && listed.some((e) => e.id === "river_crocodile" && e.boss), "list enemies");
 ok(JSON.parse(cli("list", "skills", "--json")).skills.length === 27, "list skills --json");
 ok(JSON.parse(cli("show", "nurul")).levels?.length > 0, "show nurul: stats per level");
 ok(/^ok/m.test(cli("check")), "check: clean");
@@ -36,7 +36,8 @@ ok(/7 tables for 4 regions/.test(cli("bind-overworld", OW)), "bind-overworld wri
 ok(/east_coast_/.test(cli("encounter", "--region", "east_coast", "--terrain", "beach")), "encounter --region uses the bound table");
 cli("render", "--what", "bestiary", "--out", path.join(ws, "best.png"));
 cli("render", "--what", "battle", "--party", "ton:4,adam:4", "--vs", "cobra,cave_bat", "--out", path.join(ws, "battle.png"));
-ok(png(path.join(ws, "best.png")) && png(path.join(ws, "battle.png")), "render bestiary + battle frame");
+cli("render", "--what", "battle", "--layout", "backview", "--status", "cards", "--vs", "apple_snail,field_rat", "--out", path.join(ws, "backview.png"));
+ok(png(path.join(ws, "best.png")) && png(path.join(ws, "battle.png")) && png(path.join(ws, "backview.png")), "render bestiary + battle frame + backview");
 cli("new-enemy", "kite_spirit", "--th", "ว่าวหลง", "--en", "Lost kite", "--art", "kite", "--level", "2", "--skills", "attack:2,kite_dive:1");
 ok(JSON.parse(cli("show", "kite_spirit")).source === "game.easybattle.json", "new-enemy writes battles/game.easybattle.json");
 writeFileSync(path.join(ws, "battles", "broken.easybattle.json"), JSON.stringify({ format: "easybattle/1", enemies: [{ id: "x", name: { th: "เอ็กซ์", en: "X" }, level: 1, stats: { hp: 5, mp: 0, atk: 1, def: 1, mag: 1, res: 1, spd: 1 }, skills: [{ skill: "laser", weight: 1 }], xp: 1, coins: 1, art: "mud" }] }));
