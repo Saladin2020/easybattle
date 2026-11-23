@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Battle, rollEncounter, xpToNext, type Action, type BattleSetup } from "../shared/engine.js";
-import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, type BattleDoc, type Terrain, type UiBackdrop, type UiLayout, type UiStatus } from "../shared/types.js";
+import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS, UI_ATB_MODES, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, UI_TIMING, type BattleDoc, type Terrain, type UiBackdrop, type UiLayout, type UiStatus } from "../shared/types.js";
 import { renderBattlePng } from "../lib/render.js";
 import { enemyStrip } from "../lib/art.js";
 import { exportBattle, type ExportPreset } from "../lib/export.js";
@@ -19,7 +19,7 @@ export function createApp(o: CreateAppOptions): Hono {
   const app = new Hono();
   const root = o.workspaceRoot;
   useGuard(app, o);
-  app.get("/api/workspace", async (c) => c.json({ ...(await workspaceSummary(root)), enums: { art: ENEMY_ART, kinds: SKILL_KINDS, targets: TARGETS, statusKinds: STATUS_KINDS, terrains: TERRAINS, cultures: CULTURES, layouts: UI_LAYOUTS, status: UI_STATUS, backdrops: UI_BACKDROPS } }));
+  app.get("/api/workspace", async (c) => c.json({ ...(await workspaceSummary(root)), enums: { art: ENEMY_ART, kinds: SKILL_KINDS, targets: TARGETS, statusKinds: STATUS_KINDS, terrains: TERRAINS, cultures: CULTURES, layouts: UI_LAYOUTS, status: UI_STATUS, backdrops: UI_BACKDROPS, timing: UI_TIMING, atbModes: UI_ATB_MODES } }));
   /** Battle screen preview PNG (no text): ?layout=&status=&backdrop=&terrain=&table=&seed=&turns= */
   app.get("/api/render", async (c) => {
     try {
@@ -36,7 +36,7 @@ export function createApp(o: CreateAppOptions): Hono {
       return c.json({ error: errMsg(e) }, 400);
     }
   });
-  /** Save the battle screen settings into a document: { doc?: id (default first), ui: {layout?, status?, backdrop?} } */
+  /** Save the battle screen settings into a document: { doc?: id (default first), ui: {layout?, status?, backdrop?, timing?, atbMode?} } */
   app.post("/api/ui", async (c) => {
     try {
       const body = (await c.req.json()) as { doc?: string; ui: BattleDoc["ui"]; dryRun?: boolean };

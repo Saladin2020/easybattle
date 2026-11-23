@@ -25,6 +25,12 @@ export type UiStatus = (typeof UI_STATUS)[number];
 /** Back-view battlefield: auto (from the terrain), paddy field or forest edge. */
 export const UI_BACKDROPS = ["auto", "paddy", "forest"] as const;
 export type UiBackdrop = (typeof UI_BACKDROPS)[number];
+/** Turn order: rounds in SPD order, or active time battle (speed-filled gauges, time bars on the status cards). */
+export const UI_TIMING = ["turn", "atb"] as const;
+export type UiTiming = (typeof UI_TIMING)[number];
+/** ATB: wait = time stops while a command menu is open; active = it keeps running. */
+export const UI_ATB_MODES = ["wait", "active"] as const;
+export type UiAtbMode = (typeof UI_ATB_MODES)[number];
 
 export interface Name {
   th: string;
@@ -179,6 +185,10 @@ export interface UiSettings {
   /** Default: rows for classic, cards for backview (backview has no rows). */
   status?: UiStatus;
   backdrop?: UiBackdrop;
+  /** Default turn. */
+  timing?: UiTiming;
+  /** ATB only; default wait. */
+  atbMode?: UiAtbMode;
 }
 
 export interface BattleDoc {

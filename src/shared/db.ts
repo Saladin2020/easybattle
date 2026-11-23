@@ -1,4 +1,4 @@
-import { CULTURES, DEFAULT_RULES, ENEMY_ART, FORMAT, SKILL_KINDS, STATS, STATUS_KINDS, TARGETS, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, type BattleDb, type BattleDoc, type Diagnostic, type Rules } from "./types.js";
+import { CULTURES, DEFAULT_RULES, ENEMY_ART, FORMAT, SKILL_KINDS, STATS, STATUS_KINDS, TARGETS, TERRAINS, UI_ATB_MODES, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, UI_TIMING, type BattleDb, type BattleDoc, type Diagnostic, type Rules } from "./types.js";
 
 export const SAFE_ID = /^[a-z0-9][a-z0-9_-]*$/;
 /** Words that must not appear in names: no sacred figures, scripture or calligraphy as game content. */
@@ -48,6 +48,9 @@ export function checkDoc(raw: unknown, d: Diags, file: string) {
       if (ui.layout !== undefined && !(UI_LAYOUTS as readonly unknown[]).includes(ui.layout)) d.error(`${file}.ui.layout`, `layout must be one of ${UI_LAYOUTS.join(", ")}`);
       if (ui.status !== undefined && !(UI_STATUS as readonly unknown[]).includes(ui.status)) d.error(`${file}.ui.status`, `status must be one of ${UI_STATUS.join(", ")}`);
       if (ui.backdrop !== undefined && !(UI_BACKDROPS as readonly unknown[]).includes(ui.backdrop)) d.error(`${file}.ui.backdrop`, `backdrop must be one of ${UI_BACKDROPS.join(", ")}`);
+      if (ui.timing !== undefined && !(UI_TIMING as readonly unknown[]).includes(ui.timing)) d.error(`${file}.ui.timing`, `timing must be one of ${UI_TIMING.join(", ")}`);
+      if (ui.atbMode !== undefined && !(UI_ATB_MODES as readonly unknown[]).includes(ui.atbMode)) d.error(`${file}.ui.atbMode`, `atbMode must be one of ${UI_ATB_MODES.join(", ")}`);
+      if (ui.atbMode !== undefined && ui.timing !== "atb") d.warn(`${file}.ui.atbMode`, "atbMode only matters with timing: \"atb\"");
       if (ui.layout === "backview" && ui.status === "rows") d.warn(`${file}.ui.status`, "the backview layout has no HP rows; it shows status cards instead");
     }
   }

@@ -19,10 +19,11 @@ const noOverlap = (named: Array<[string, Rect]>) => {
 
 describe("battle screen layout", () => {
   it("resolves settings (classic default, backview turns rows into cards)", () => {
-    expect(resolveUi()).toEqual({ layout: "classic", status: "rows", backdrop: "auto" });
-    expect(resolveUi({ layout: "backview" })).toEqual({ layout: "backview", status: "cards", backdrop: "auto" });
+    expect(resolveUi()).toEqual({ layout: "classic", status: "rows", backdrop: "auto", timing: "turn", atbMode: "wait" });
+    expect(resolveUi({ layout: "backview" })).toEqual({ layout: "backview", status: "cards", backdrop: "auto", timing: "turn", atbMode: "wait" });
     expect(resolveUi({ layout: "backview", status: "rows" }).status).toBe("cards");
-    expect(resolveUi({ layout: "backview", status: "none" }, { layout: "classic" })).toEqual({ layout: "classic", status: "none", backdrop: "auto" });
+    expect(resolveUi({ layout: "backview", status: "none" }, { layout: "classic" })).toEqual({ layout: "classic", status: "none", backdrop: "auto", timing: "turn", atbMode: "wait" });
+    expect(resolveUi({ timing: "atb" }, { atbMode: "active" })).toMatchObject({ timing: "atb", atbMode: "active" });
     expect(Object.keys(exportLayouts()).sort()).toEqual(["backview:cards", "backview:none", "classic:cards", "classic:none", "classic:rows"]);
   });
 
@@ -45,7 +46,7 @@ describe("battle screen layout", () => {
           expect(L.grid!.cols * L.grid!.cell.w).toBeLessThanOrEqual(L.menu.w);
           expect(L.grid!.rows * L.grid!.cell.h).toBeLessThanOrEqual(L.menu.h);
         }
-        for (const c of L.cards) for (const k of ["portrait", "lv", "lifeLabel", "lifeBar", "powLabel", "powBar", "state"] as const) {
+        for (const c of L.cards) for (const k of ["portrait", "lv", "lifeLabel", "lifeBar", "powLabel", "powBar", "state", "time"] as const) {
           // text cells may poke 3 px above the card (tone-mark rows are empty in card labels), bars and pictures must be inside
           const r = c[k];
           const box = k.endsWith("Label") || k === "state" ? { ...c.rect, y: c.rect.y - 3, h: c.rect.h + 3 } : c.rect;
@@ -69,6 +70,20 @@ describe("battle screen layout", () => {
       }
     });
   }
+
+  it("ATB time bar sits behind the state label, clear of the bars and the portrait", () => {
+    for (const layout of ["classic", "backview"] as const)
+      for (let n = 1; n <= 4; n++) {
+        const L = screenLayout(layout, "cards", n);
+        for (const c of L.cards) {
+          expect(noOverlap([["time", c.time], ["powBar", c.powBar], ["lifeBar", c.lifeBar], ["portrait", c.portrait]])).toEqual([]);
+          expect(c.time.y).toBeGreaterThan(c.powBar.y + c.powBar.h);
+          expect(c.time.y + c.time.h).toBeLessThanOrEqual(c.rect.y + c.rect.h - 2);
+          expect(c.time.x).toBe(c.state.x);
+          expect(c.time.w).toBeGreaterThanOrEqual(36);
+        }
+      }
+  });
 
   it("card states follow turn order: the commanding hero is READY!, fallen heroes DOWN, everyone else WAIT...", () => {
     expect(cardState(30, 2, 2, true)).toBe("ready");

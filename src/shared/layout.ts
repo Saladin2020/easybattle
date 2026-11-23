@@ -31,6 +31,8 @@ export interface CardRects {
   powLabel: Rect;
   powBar: Rect;
   state: Rect;
+  /** ATB time bar: a stripe behind the READY! / WAIT... label that fills with the gauge. */
+  time: Rect;
   /** Compact cards (4 heroes) leave the LIFE / POW words out and show numbers only. */
   compact: boolean;
 }
@@ -67,7 +69,9 @@ export function resolveUi(ui: UiSettings = {}, opts: UiSettings = {}): Required<
   let status: UiStatus = opts.status ?? ui.status ?? (layout === "backview" ? "cards" : "rows");
   if (layout === "backview" && status === "rows") status = "cards";
   const backdrop: UiBackdrop = opts.backdrop ?? ui.backdrop ?? "auto";
-  return { layout, status, backdrop };
+  const timing = opts.timing ?? ui.timing ?? "turn";
+  const atbMode = opts.atbMode ?? ui.atbMode ?? "wait";
+  return { layout, status, backdrop, timing, atbMode };
 }
 
 /** Backdrop picked for a terrain when backdrop is "auto". */
@@ -97,6 +101,7 @@ export function cardRects(n: number): CardRects[] {
       powLabel: { x: rx, y: y + 15, w: rw, h: FONT16.line },
       powBar: { x: rx, y: y + 34, w: rw, h: 3 },
       state: { x: rx, y: y + 33, w: rw, h: FONT16.line },
+      time: { x: rx, y: y + 41, w: rw, h: 11 },
       compact,
     };
   });

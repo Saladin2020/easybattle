@@ -13,7 +13,7 @@ import path from "node:path";
 import { z } from "zod";
 import { entrySummary } from "../shared/db.js";
 import { Battle, heroStats, rollEncounter, xpToNext } from "../shared/engine.js";
-import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS } from "../shared/types.js";
+import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS, UI_ATB_MODES, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, UI_TIMING } from "../shared/types.js";
 import { bestiaryRaster, EXPORT_PRESETS, exportBattle } from "../lib/export.js";
 import { encodePng } from "../lib/png.js";
 import { renderBattlePng } from "../lib/render.js";
@@ -33,7 +33,7 @@ export const FORMAT_CHEATSHEET = `Document battles/<id>.easybattle.json: { forma
   encounter: { id, name?, regions? (Easy Tilemap overworld region ids), cultures? ${CULTURES.join("|")}, terrains [${TERRAINS.join("|")}], rate (avg steps), groups [{enemies [≤5 ids], weight, levelBonus?}], music?, background?, scripted? (bosses) }
   item:    { item (Easy Items id), hp?, mp?, cures?, target? ally|all_allies }
   rules:   { maxLevel, partySize, xp {base, step, quad}: next(L) = base + step·(L−1) + quad·(L−1)², crit %, flee %, enemyScale %/level, terrainCodes {overworld ground code: terrain} }
-  ui:      { layout? ${UI_LAYOUTS.join("|")} (backview = 16-bit back view: blue message window, enemies on a backdrop, party from behind with HP arcs), status? ${UI_STATUS.join("|")} (cards = Easy Portrait face, Lv, LIFE/POW bars, READY!/WAIT...; backview defaults to cards), backdrop? ${UI_BACKDROPS.join("|")} } — battle screen; classic + rows is the default
+  ui:      { layout? ${UI_LAYOUTS.join("|")} (backview = 16-bit back view: blue message window, enemies on a backdrop, party from behind with HP arcs), status? ${UI_STATUS.join("|")} (cards = Easy Portrait face, Lv, LIFE/POW bars, READY!/WAIT...; backview defaults to cards), backdrop? ${UI_BACKDROPS.join("|")}, timing? ${UI_TIMING.join("|")} (atb = active time battle: gauges fill by SPD, READY! opens the menu, WAIT... cards show a filling time bar, enemies act when full), atbMode? ${UI_ATB_MODES.join("|")} (wait = time stops in menus) } — battle screen; classic + rows + turn is the default
 Damage: physical = atk·power/10 − def/2, magic = mag·power/10 − res/2; ×0.9–1.1; crit ×1.5; weak ×1.5; resist ×0.5; defend ×0.5; immune 0.
 Table pick: region id > culture > fallback. Content rules: no sacred figures, scripture or Arabic calligraphy as battle content; martial arts, herbs, firecrackers, kites and animals are fine; keep the cast multicultural.`;
 

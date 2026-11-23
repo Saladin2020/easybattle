@@ -150,23 +150,25 @@ function Encounters({ ws, onPick }: { ws: Summary; onPick: (id: string) => void 
   );
 }
 
-const LAYOUT_TH: Record<string, string> = { classic: "มุมข้าง (classic)", backview: "มุมหลัง (backview)", rows: "แถบ HP (rows)", cards: "การ์ดสถานะ (cards)", none: "ไม่มี (none)", auto: "ตามภูมิประเทศ (auto)", paddy: "ทุ่งนา (paddy)", forest: "ชายป่า (forest)" };
+const LAYOUT_TH: Record<string, string> = { classic: "มุมข้าง (classic)", backview: "มุมหลัง (backview)", rows: "แถบ HP (rows)", cards: "การ์ดสถานะ (cards)", none: "ไม่มี (none)", auto: "ตามภูมิประเทศ (auto)", paddy: "ทุ่งนา (paddy)", forest: "ชายป่า (forest)", turn: "ตามรอบ (turn)", atb: "เกจเวลา (ATB)", wait: "หยุดเวลาในเมนู (wait)", active: "เวลาเดินตลอด (active)" };
 
 /** Battle screen settings: layout, status bar, backdrop, with a live preview (no text) and save into a document. */
+type UiKey = "layout" | "status" | "backdrop" | "timing" | "atbMode";
+
 function Screen({ ws, onSaved }: { ws: Summary; onSaved: () => void }) {
-  const [ui, setUi] = useState(ws.ui ?? { layout: "classic", status: "rows", backdrop: "auto" });
+  const [ui, setUi] = useState<Summary["ui"]>(ws.ui ?? { layout: "classic", status: "rows", backdrop: "auto" });
   const [table, setTable] = useState("");
   const [doc, setDoc] = useState(ws.docs.includes("core") ? "core" : ws.docs[0] ?? "core");
   const [msg, setMsg] = useState("");
   const statuses = ui.layout === "backview" ? ["cards", "none"] : ["rows", "cards", "none"];
-  const set = (k: "layout" | "status" | "backdrop", v: string) => {
+  const set = (k: UiKey, v: string) => {
     const next = { ...ui, [k]: v };
     if (k === "layout") next.status = v === "backview" ? "cards" : "rows";
     setUi(next);
   };
   const qs = new URLSearchParams({ ...ui, ...(table ? { table } : {}) }).toString();
-  const sel = (k: "layout" | "status" | "backdrop", opts: string[]) => (
-    <label>{k} <select value={ui[k]} data-ui={k} onChange={(e) => set(k, e.target.value)}>{opts.map((o) => <option key={o} value={o}>{LAYOUT_TH[o] ?? o}</option>)}</select></label>
+  const sel = (k: UiKey, opts: string[]) => (
+    <label>{k} <select value={ui[k] ?? opts[0]} data-ui={k} onChange={(e) => set(k, e.target.value)}>{opts.map((o) => <option key={o} value={o}>{LAYOUT_TH[o] ?? o}</option>)}</select></label>
   );
   return (
     <>
@@ -174,6 +176,8 @@ function Screen({ ws, onSaved }: { ws: Summary; onSaved: () => void }) {
         {sel("layout", ["classic", "backview"])}
         {sel("status", statuses)}
         {ui.layout === "backview" && sel("backdrop", ["auto", "paddy", "forest"])}
+        {sel("timing", ["turn", "atb"])}
+        {ui.timing === "atb" && sel("atbMode", ["wait", "active"])}
         <label>table <select value={table} onChange={(e) => setTable(e.target.value)}><option value="">(first 3 enemies)</option>{ws.encounters.map((t) => <option key={t.id} value={t.id}>{t.id}</option>)}</select></label>
       </div>
       <img className="screen-preview" alt="battle screen preview" src={`/api/render?${qs}`} width={960} height={540} style={{ imageRendering: "pixelated", maxWidth: "100%", height: "auto" }} />
