@@ -88,6 +88,7 @@ export async function loadBattle(PIXI, url = "easybattle.json") {
       tex[`face:${h.id}`] = await load(`portraits/${h.portrait ?? h.id}.png`);
     }
     for (const b of ["paddy", "forest"]) tex[`bd:${b}`] = await load(`backdrops/backview_${b}.png`);
+    for (const a of new Set(db.enemies.map((e) => e.art))) tex[`front:${a}`] = await load(`enemies/${a}_front.png`);
   }
   let ef = null;
   if (ui?.fonts?.length) {
@@ -146,6 +147,12 @@ class BattleUI {
     this.sprites = [];
     this.build();
     app.stage.addChild(this.view);
+    this.clock = (t) => {
+      this.ms = (this.ms ?? 0) + t.deltaMS;
+      this.bob(this.ms);
+      this.atbTick?.(t.deltaMS);
+    };
+    app.ticker.add(this.clock);
     this.keys = (e) => this.onKey(e);
     window.addEventListener("keydown", this.keys);
     const names = this.engine.actors.filter((a) => a.side === 1).map((a) => this.nm(a));
@@ -309,7 +316,8 @@ class BattleUI {
     enemies.forEach((i, k) => {
       const e = defs[k];
       const r = rects[k];
-      const base = this.res.tex[`enemy:${e.art}`];
+      // facing the camera; older exports without front strips use the side art
+      const base = this.res.tex[`front:${e.art}`] ?? this.res.tex[`enemy:${e.art}`];
       const frames = [0, 1, 2].map((f) => new P.Texture({ source: base.source, frame: new P.Rectangle(f * r.w, 0, r.w, r.h) }));
       const s = new P.Sprite(frames[0]);
       s.position.set(r.x, r.y);
@@ -575,7 +583,16 @@ class BattleUI {
   }
   enemyFrame(i, k) {
     const sp = this.sprites[i];
-    if (sp && sp.enemy) sp.s.texture = sp.frames[k];
+    if (!sp || !sp.enemy) return;
+    sp.hit = k === 2;
+    sp.s.texture = sp.frames[k];
+  }
+  /** Back view: enemies breathe (idle bob, frames 0/1), staggered so a group does not move in lockstep. */
+  bob(ms) {
+    if (this.layout !== "backview") return;
+    this.sprites.forEach((sp, i) => {
+      if (sp?.enemy && !sp.hit) sp.s.texture = sp.frames[Math.floor(ms / 420 + i * 0.5) % 2];
+    });
   }
 
   async next() {
@@ -929,6 +946,7 @@ class BattleUI {
 
   close() {
     window.removeEventListener("keydown", this.keys);
+    this.app.ticker.remove(this.clock);
     this.opts.onClose?.(this.result, this.rewards, this.used);
     if (!this.opts.keep) this.view.destroy({ children: true });
   }

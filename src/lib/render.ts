@@ -82,7 +82,7 @@ async function renderBackview(root: string, db: BattleDb, b: Battle, ui: Require
   enemies.forEach(({ a }, k) => {
     if (a.hp <= 0) return;
     const e = defs[k]!;
-    const f = drawEnemy(e.art, e.palette);
+    const f = drawEnemy(e.art, e.palette, "front");
     const p = rects[k]!;
     r.ellipse(p.x + 6, p.y + p.h - 5, p.w - 12, 6, [0, 0, 0, 70]);
     r.blit(f.frames[0]!, p.x, p.y);

@@ -503,7 +503,10 @@ func _build_backview() -> void:
 		var i: int = enemies[k]
 		var r: Rect2 = rects[k]
 		var e: Dictionary = defs[k]
-		var path := "res://easybattle/enemies/%s.png" % e.get("art", "")
+		# facing the camera; older exports without front strips use the side art
+		var path := "res://easybattle/enemies/%s_front.png" % e.get("art", "")
+		if not ResourceLoader.exists(path):
+			path = "res://easybattle/enemies/%s.png" % e.get("art", "")
 		var at := AtlasTexture.new()
 		if ResourceLoader.exists(path):
 			at.atlas = load(path)
@@ -834,7 +837,22 @@ func _hero_frame(i: int, frame: int) -> void:
 func _enemy_frame(i: int, frame: int) -> void:
 	var s: Dictionary = _sprites[i]
 	if s and s["enemy"]:
+		s["hit"] = frame == 2
 		s["atlas"].region = Rect2(frame * s["w"], 0, s["w"], s["h"])
+
+
+var _ms := 0.0
+
+
+func _process(delta: float) -> void:
+	_ms += delta * 1000.0
+	# back view: enemies breathe (idle bob, frames 0/1), staggered so a group does not move in lockstep
+	if layout == "backview":
+		for i in _sprites.size():
+			var s = _sprites[i]
+			if s and s["enemy"] and not s.get("hit", false):
+				s["atlas"].region = Rect2((int(floor(_ms / 420.0 + i * 0.5)) % 2) * s["w"], 0, s["w"], s["h"])
+	_atb_process(delta)
 
 
 func _refresh() -> void:
@@ -1375,3 +1393,7 @@ func _close() -> void:
 	if opts.get("keep", false):
 		return
 	queue_free()
+
+
+func _atb_process(_delta: float) -> void:
+	pass

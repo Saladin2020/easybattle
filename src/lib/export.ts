@@ -189,6 +189,8 @@ async function writeArt(w: Writer, root: string, db: BattleDb, res: ExportResult
     const e = db.enemies.find((x) => x.art === art)!;
     const s = enemyStrip(art, e.palette);
     await w.write(`${sub}enemies/${art}.png`, encodePng(s.width, s.height, s.data));
+    const f = enemyStrip(art, e.palette, "front");
+    await w.write(`${sub}enemies/${art}_front.png`, encodePng(f.width, f.height, f.data));
   }
   for (const h of db.heroes) {
     const art = heroArt(h);
@@ -278,7 +280,8 @@ Serve this folder over HTTP (fetch needs it):  python3 -m http.server   then ope
   easybattle.json       battle database (heroes, enemies, skills, statuses, encounters, rules)
   easybattle-core.js    the battle engine (same code as the CLI; also runs in Node)
   easybattle-pixi.js    loadBattle(PIXI, "easybattle.json") → { start(app, setup, opts), scripted(table, seed), party(level) }
-  enemies/<art>.png     enemy strips: idle, idle (bob), hurt
+  enemies/<art>.png     enemy strips: idle, idle (bob), hurt — facing left (classic)
+  enemies/<art>_front.png  the same facing the camera (back view)
   heroes/<id>.png       Easy Sprite side-view sheets (left row: idle, attack, hurt, KO, cheer)
   heroes/<id>_back.png  Easy Sprite top-down sheets (back row) for the back-view layout
   portraits/<id>.png    Easy Portrait busts for the status cards (neutral, happy, worried, sad)
