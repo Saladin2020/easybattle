@@ -17,6 +17,7 @@ function mulberry32(seed) {
 
 // src/shared/engine.ts
 var ATTACK = { id: "attack", name: { th: "\u0E42\u0E08\u0E21\u0E15\u0E35", en: "Attack", ms: "Serang" }, kind: "physical", target: "enemy", power: 10, mp: 0, fx: "hit_sparks", sfx: "hit" };
+var ATB = { full: 1e3, base: 10, start: 300, roundSteps: 60, stepsPerSecond: 30, salt: 1592593019 };
 function xpToNext(db, level) {
   const c = db.rules.xp;
   const l = level - 1;
@@ -48,9 +49,16 @@ var Battle = class {
     __publicField(this, "items");
     __publicField(this, "rnd");
     __publicField(this, "noFlee");
+    __publicField(this, "timing");
+    __publicField(this, "atbMode");
+    /** ATB gauges per actor (0..ATB.full) and time steps so far. */
+    __publicField(this, "gauge", []);
+    __publicField(this, "steps", 0);
     this.rnd = mulberry32(setup.seed);
     this.items = { ...setup.items ?? {} };
     this.noFlee = !!setup.noFlee;
+    this.timing = setup.timing === "atb" ? "atb" : "turn";
+    this.atbMode = setup.atbMode === "active" ? "active" : "wait";
     setup.party.forEach((p, i) => {
       const h = db.heroes.find((x) => x.id === p.id);
       if (!h) throw new Error(`Unknown hero "${p.id}"`);
@@ -65,7 +73,94 @@ var Battle = class {
       this.actors.push({ side: 1, index: i, id: e.id, name: e.name, level: lv, hp: max.hp, mp: max.mp, max, statuses: [], defending: false, skills: e.skills.map((s) => s.skill), weak: e.weak ?? [], resist: e.resist ?? [], immune: e.immune ?? [], xp: 0 });
       if (e.boss) this.noFlee = true;
     });
-    this.newRound();
+    if (this.timing === "atb") {
+      const r2 = mulberry32((setup.seed ^ ATB.salt) >>> 0);
+      this.gauge = this.actors.map(() => Math.floor(r2() * ATB.start));
+      this.round = 1;
+      this.log.push({ t: "round", round: 1 });
+    } else this.newRound();
+  }
+  /** ATB: gauge gain per time step. */
+  atbGain(i) {
+    return this.stat(this.actors[i], "spd") + ATB.base;
+  }
+  /** ATB: one time step. Gauges of living actors that are not ready fill; those that fill join the ready queue
+   * (most overflow first, then higher SPD, heroes, lower index). */
+  step() {
+    this.steps += 1;
+    if (this.steps % ATB.roundSteps === 0) {
+      this.round += 1;
+      this.log.push({ t: "round", round: this.round });
+    }
+    const filled = [];
+    for (let i = 0; i < this.actors.length; i++) {
+      if (this.actors[i].hp <= 0) {
+        this.gauge[i] = 0;
+        continue;
+      }
+      if (this.queue.includes(i)) continue;
+      this.gauge[i] = this.gauge[i] + this.atbGain(i);
+      if (this.gauge[i] >= ATB.full) {
+        filled.push([i, this.gauge[i] - ATB.full]);
+        this.gauge[i] = ATB.full;
+      }
+    }
+    filled.sort(([x, ox], [y, oy]) => {
+      if (ox !== oy) return oy - ox;
+      const a = this.actors[x];
+      const b = this.actors[y];
+      const sa = this.stat(a, "spd");
+      const sb = this.stat(b, "spd");
+      if (sa !== sb) return sb - sa;
+      if (a.side !== b.side) return a.side - b.side;
+      return a.index - b.index;
+    });
+    for (const [i] of filled) this.queue.push(i);
+  }
+  /** ATB: let time run for n steps (runtimes call this every frame). Returns the steps taken: 0 when the battle is
+   * over, in turn mode, or in "wait" mode while a command menu is open. */
+  advance(n, menuOpen = false) {
+    if (this.timing !== "atb" || this.over || menuOpen && this.atbMode === "wait") return 0;
+    for (let k = 0; k < n; k++) this.step();
+    return n;
+  }
+  /** ATB: actors with a full gauge, in the order they act. */
+  ready() {
+    return this.queue.filter((i) => this.actors[i].hp > 0);
+  }
+  /** ATB: the actor to act now (who, when it is ready, else the head of the ready queue) without letting time
+   * run; -1 when nobody is ready. Applies the start of the turn (defend ends, sleep / stun skip). */
+  readyActor(who) {
+    return this.atbNext(who, false);
+  }
+  atbNext(who, run) {
+    let guard = 0;
+    while (!this.over) {
+      this.queue = this.queue.filter((i2) => this.actors[i2].hp > 0);
+      if (who !== void 0 && !this.queue.includes(who)) return -1;
+      if (!this.queue.length) {
+        if (!run || guard++ > 1e5) return -1;
+        this.step();
+        continue;
+      }
+      const i = who ?? this.queue[0];
+      if (this.startTurn(i)) return i;
+      if (who !== void 0) return -1;
+    }
+    return -1;
+  }
+  /** Start of a turn: defend wears off; sleep / stun skip it (false). */
+  startTurn(i) {
+    const a = this.actors[i];
+    a.defending = false;
+    const blocker = a.statuses.find((s) => {
+      const k = this.status(s.id).kind;
+      return k === "sleep" || k === "stun";
+    });
+    if (!blocker) return true;
+    this.log.push({ t: "skip", actor: i, status: blocker.id });
+    this.endTurn(i);
+    return false;
   }
   skill(id) {
     if (id === "attack") return this.db.skills.find((s2) => s2.id === "attack") ?? ATTACK;
@@ -109,8 +204,10 @@ var Battle = class {
     });
     this.queue = order;
   }
-  /** Actor index whose turn it is (skipping the fallen), or -1 when the battle is over. */
+  /** Actor index whose turn it is (skipping the fallen), or -1 when the battle is over. ATB: runs time until
+   * someone is ready. */
   current() {
+    if (this.timing === "atb") return this.atbNext(void 0, true);
     while (!this.over) {
       while (this.queue.length && this.actors[this.queue[0]].hp <= 0) this.queue.shift();
       if (!this.queue.length) {
@@ -118,25 +215,16 @@ var Battle = class {
         continue;
       }
       const i = this.queue[0];
-      const a = this.actors[i];
-      a.defending = false;
-      const blocker = a.statuses.find((s) => {
-        const k = this.status(s.id).kind;
-        return k === "sleep" || k === "stun";
-      });
-      if (blocker) {
-        this.log.push({ t: "skip", actor: i, status: blocker.id });
-        this.endTurn(i);
-        continue;
-      }
+      if (!this.startTurn(i)) continue;
       return i;
     }
     return -1;
   }
-  /** The player chooses for side 0; call auto() for enemies (or for an auto-battle). */
-  act(action) {
+  /** The player chooses for side 0; call auto() for enemies (or for an auto-battle). ATB: who = a ready actor
+   * (default: the head of the ready queue). */
+  act(action, who) {
     const start = this.log.length;
-    const i = this.current();
+    const i = this.timing === "atb" && who !== void 0 ? this.atbNext(who, false) : this.current();
     if (i < 0) return [];
     const a = this.actors[i];
     this.log.push({ t: "turn", actor: i });
@@ -305,7 +393,10 @@ var Battle = class {
     }
   }
   endTurn(i) {
-    if (this.queue[0] === i) this.queue.shift();
+    if (this.timing === "atb") {
+      this.queue = this.queue.filter((x) => x !== i);
+      this.gauge[i] = 0;
+    } else if (this.queue[0] === i) this.queue.shift();
     const a = this.actors[i];
     if (a.hp <= 0) return;
     const keep = [];
@@ -342,8 +433,8 @@ var Battle = class {
     }
   }
   /** Enemy AI (two rolls: skill, target) or a greedy auto-battle policy for the party (no rolls). */
-  auto() {
-    const i = this.current();
+  auto(who) {
+    const i = this.timing === "atb" && who !== void 0 ? this.atbNext(who, false) : this.current();
     if (i < 0) return { kind: "defend" };
     const a = this.actors[i];
     if (a.side === 1) {
@@ -446,7 +537,8 @@ var Battle = class {
       over: this.over ?? "",
       actors: this.actors.map((a) => ({ id: a.id, hp: a.hp, mp: a.mp, st: a.statuses.map((s) => `${s.id}:${s.turns}`).join(",") })),
       items: this.items,
-      log: this.log.length
+      log: this.log.length,
+      ...this.timing === "atb" ? { steps: this.steps, gauge: this.gauge.join(",") } : {}
     };
   }
 };
@@ -474,6 +566,7 @@ function rollEncounter(db, where, seed) {
 }
 var PARITY_SETUP = { party: [{ id: "ton", level: 4 }, { id: "nurul", level: 4 }, { id: "mei", level: 4 }], enemies: [{ id: "paddy_crab" }, { id: "giant_mosquito" }, { id: "monkey_thief", level: 3 }], seed: 20261123, items: { balm: 2, teh_tarik: 1 } };
 export {
+  ATB,
   ATTACK,
   Battle,
   PARITY_SETUP,

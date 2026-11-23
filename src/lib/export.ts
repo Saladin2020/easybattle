@@ -50,12 +50,22 @@ export function fnv1a(s: string): string {
 }
 
 /** Scripted parity cases replayed by test_battle.gd. Actions: null = engine.auto(). */
+type ParityStep = Action | null | { wait: number; menu?: boolean } | { ready: true };
+
 export function parityCases(db: BattleDb) {
   const heroes = db.heroes.map((h) => h.id);
-  const cases: Array<{ name: string; setup: BattleSetup; actions: Array<Action | null> }> = [];
+  // actions: an Action, null (= auto), or for ATB {wait: steps, menu?} (advance time) / {ready: true} (the ready actor acts on auto)
+  const cases: Array<{ name: string; setup: BattleSetup; actions: Array<ParityStep> }> = [];
   if (["ton", "nurul", "mei"].every((h) => heroes.includes(h)) && ["paddy_crab", "giant_mosquito", "monkey_thief"].every((e) => db.enemies.some((x) => x.id === e))) {
     cases.push({ name: "auto_village", setup: PARITY_SETUP, actions: [] });
     cases.push({ name: "scripted_mix", setup: { ...PARITY_SETUP, seed: 77 }, actions: [{ kind: "skill", skill: "teep", target: 4 }, { kind: "item", item: "balm", target: 0 }, null, { kind: "defend" }, null, null, { kind: "skill", skill: "firecracker" }, null, null, null] });
+  }
+  if (heroes.length && db.enemies.length >= 2) {
+    const party = heroes.slice(0, Math.min(3, db.rules.partySize)).map((id) => ({ id, level: 3 }));
+    const enemies = db.enemies.filter((e) => !e.boss).slice(0, 3).map((e) => ({ id: e.id }));
+    const steps: ParityStep[] = [{ wait: 25 }, { ready: true }, { wait: 40, menu: true }, { ready: true }, null, { wait: 7 }, { ready: true }, { ready: true }, null];
+    cases.push({ name: "atb_wait", setup: { party, enemies, seed: 31, items: {}, timing: "atb", atbMode: "wait" }, actions: steps });
+    cases.push({ name: "atb_active", setup: { party, enemies, seed: 32, items: {}, timing: "atb", atbMode: "active" }, actions: steps });
   }
   const boss = db.enemies.find((e) => e.boss);
   if (boss && heroes.length >= 3) cases.push({ name: "boss", setup: { party: heroes.slice(0, 3).map((id) => ({ id, level: boss.level + 1 })), enemies: [{ id: boss.id }], seed: 4242, items: Object.fromEntries(db.items.slice(0, 2).map((i) => [i.item, 2])) }, actions: [] });
@@ -65,7 +75,11 @@ export function parityCases(db: BattleDb) {
     const b = new Battle(db, c.setup);
     for (const a of c.actions) {
       if (b.over) break;
-      b.act(a ?? b.auto());
+      if (a && "wait" in a) b.advance(a.wait, !!a.menu);
+      else if (a && "ready" in a) {
+        const r = b.readyActor();
+        if (r >= 0) b.act(b.auto(r), r);
+      } else b.act(a ?? b.auto());
     }
     b.autoRun();
     return { ...c, snapshot: canon(b.snapshot()), log: fnv1a(canon(b.log)), rewards: canon(b.rewards()) };

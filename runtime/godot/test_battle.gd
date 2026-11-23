@@ -51,7 +51,16 @@ func _init() -> void:
 		for a in case["actions"]:
 			if e.over != "":
 				break
-			e.act(e.auto() if a == null else a)
+			if a == null:
+				e.act(e.auto())
+			elif a.has("wait"):
+				e.advance(int(a["wait"]), bool(a.get("menu", false)))
+			elif a.has("ready"):
+				var r := e.ready_actor()
+				if r >= 0:
+					e.act(e.auto(r), r)
+			else:
+				e.act(a)
 		e.auto_run()
 		var snap := _canon(e.snapshot())
 		var logh := _fnv(_canon(e.log))
