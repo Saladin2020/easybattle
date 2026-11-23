@@ -529,12 +529,14 @@ class BattleUI {
       t = this.text(str, 10, color);
       t.anchor.set(0.5);
     }
-    t.position.set(c.x, c.y - 24);
+    // back view: enemies stand right under the message window, so their numbers rise from the body
+    const y0 = this.layout === "backview" ? c.y + (this.sprites[i].enemy ? -8 : -30) : c.y - 24;
+    t.position.set(c.x, y0);
     this.fxLayer.addChild(t);
     const start = performance.now();
     const tick = () => {
       const k = (performance.now() - start) / (600 / Math.max(this.speed, 0.01));
-      t.y = c.y - 24 - 14 * Math.min(1, k);
+      t.y = y0 - 14 * Math.min(1, k);
       if (k >= 1) {
         this.app.ticker.remove(tick);
         t.destroy();

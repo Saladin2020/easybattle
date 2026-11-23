@@ -874,7 +874,8 @@ func _popup(i: int, text: String, col: Color) -> void:
 		pl.add_theme_constant_override("shadow_offset_x", 1)
 		pl.add_theme_constant_override("shadow_offset_y", 1)
 		var c := _center(i)
-		pl.position = Vector2(roundf(c.x - _text_w(pl) / 2.0), roundf(c.y - 35))
+		# enemies stand right under the message window, so their numbers rise from the body
+		pl.position = Vector2(roundf(c.x - _text_w(pl) / 2.0), roundf(c.y - (19.0 if _sprites[i]["enemy"] else 41.0)))
 		_fx_layer.add_child(pl)
 		var tw0 := create_tween()
 		tw0.tween_property(pl, "position:y", pl.position.y - 14, 0.6 / maxf(speed, 0.01))
