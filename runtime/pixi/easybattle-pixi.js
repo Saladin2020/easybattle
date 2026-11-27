@@ -207,7 +207,8 @@ class BattleUI {
     return e.name[this.lang] || e.name.th;
   }
   wait(s) {
-    return new Promise((r) => setTimeout(r, this.speed <= 0 ? 0 : (s * 1000) / this.speed));
+    // Once closed, pending waits never resolve so in-flight animations stop touching destroyed sprites.
+    return new Promise((r) => setTimeout(() => this.closed || r(), this.speed <= 0 ? 0 : (s * 1000) / this.speed));
   }
   text(str, size = 10, color = COLORS.text) {
     const t = new this.PIXI.Text({ text: str, style: { fontFamily: "Kanit, sans-serif", fontSize: size * 2, fill: color, stroke: { color: COLORS.ink, width: 3 } } });
@@ -670,7 +671,11 @@ class BattleUI {
     this.state = "busy";
     this.menuBox.visible = false;
     this.cursor.visible = false;
-    for (const ev of this.engine.act(action, this.atb ? who : undefined)) await this.show(ev);
+    for (const ev of this.engine.act(action, this.atb ? who : undefined)) {
+      if (this.closed) return;
+      await this.show(ev);
+    }
+    if (this.closed) return;
     this.refresh();
     return this.next();
   }
@@ -1059,6 +1064,8 @@ class BattleUI {
   }
 
   close() {
+    if (this.closed) return;
+    this.closed = true;
     window.removeEventListener("keydown", this.keys);
     this.app.ticker.remove(this.clock);
     this.opts.onClose?.(this.result, this.rewards, this.used);
