@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 const ws = mkdtempSync(path.join(os.tmpdir(), "easybattle-cli-"));
-const cli = (...args) => execFileSync("npx", ["tsx", "src/cli.ts", ...args, "--workspace", ws], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const cli = (...args) => execFileSync(process.execPath, ["--import", "tsx", "src/cli.ts", ...args, "--workspace", ws], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 let failed = false;
 const ok = (cond, label) => {
   console.log(`${cond ? "ok  " : "FAIL"} ${label}`);
@@ -16,10 +16,10 @@ const OW = path.resolve("samples/overworld/regions.json");
 
 cli("init");
 ok(["core", "bestiary", "bosses"].every((d) => existsSync(path.join(ws, "battles", `${d}.easybattle.json`))), "init copies the starter battles");
-ok(/4 heroes · 17 enemies · 27 skills/.test(cli("info")), "info");
+ok(/4 heroes · 17 enemies · 31 skills/.test(cli("info")), "info");
 const listed = JSON.parse(cli("list", "enemies", "--json")).enemies;
 ok(listed.length === 17 && listed.some((e) => e.id === "river_crocodile" && e.boss), "list enemies");
-ok(JSON.parse(cli("list", "skills", "--json")).skills.length === 27, "list skills --json");
+ok(JSON.parse(cli("list", "skills", "--json")).skills.length === 31, "list skills --json");
 ok(JSON.parse(cli("show", "nurul")).levels?.length > 0, "show nurul: stats per level");
 ok(/^ok/m.test(cli("check")), "check: clean");
 ok(/13 of 13 item ids found/.test(cli("check", "--items", "/workspace/easyitems/samples")) || !existsSync("/workspace/easyitems/samples"), "check --items cross-checks Easy Items drops");

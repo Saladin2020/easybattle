@@ -7,7 +7,7 @@ import open from "open";
 import { createApp } from "./server/app.js";
 import { defaultWebRoot } from "./server/base.js";
 import { resolveToken } from "./shared/requestGuard.js";
-import { Battle, heroStats, rollEncounter, xpToNext, type BattleEvent } from "./shared/engine.js";
+import { Battle, heroStats, rollEncounter, skillPoints, treeCheck, treeSkills, treeSpent, treeStats, treeUnlock, xpToNext, type BattleEvent } from "./shared/engine.js";
 import { ENEMY_ART, FORMAT, TERRAINS, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, type BattleDoc, type Terrain, type UiBackdrop, type UiLayout, type UiStatus } from "./shared/types.js";
 import { bestiaryRaster, EXPORT_PRESETS, exportBattle, type ExportPreset } from "./lib/export.js";
 import { encodePng } from "./lib/png.js";
@@ -224,6 +224,44 @@ program
       const rolls = Array.from({ length: Math.max(1, Number(o.times)) }, (_, k) => ({ seed: Number(o.seed) + k, ...rollEncounter(db, { region: o.region, culture: o.culture, terrain: o.terrain as Terrain | undefined }, Number(o.seed) + k) }));
       if (o.json) return console.log(JSON.stringify({ rolls }, null, 2));
       for (const r of rolls) console.log(r.table ? `seed ${r.seed}: ${r.table} (1 in ${r.rate} steps) → ${r.enemies!.map((e) => `${e.id} Lv${e.level}`).join(", ")}` : `seed ${r.seed}: no table matches`);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("tree <hero>")
+  .description("Skill tree: points at a level, node status, and stats / skills with nodes unlocked (--unlock a,b,c tries them in order)")
+  .option("--level <n>", "Hero level", "5")
+  .option("--unlock <ids>", "Comma-separated node ids to unlock in order", "")
+  .option("--lang <th|en|ms>", "Language", "th")
+  .option("--workspace <path>")
+  .option("--json")
+  .action(async (id: string, o: { level: string; unlock: string; lang: string; workspace?: string; json?: boolean }) => {
+    try {
+      const db = await loadDbStrict(workspaceOf(o.workspace));
+      const h = db.heroes.find((x) => x.id === id);
+      if (!h) throw new Error(`unknown hero "${id}"`);
+      const level = Number(o.level);
+      let tree: string[] = [];
+      const tried = o.unlock.split(",").filter(Boolean).map((n) => {
+        const r = treeUnlock(db, h, level, tree, n);
+        tree = r.tree;
+        return `${n}:${r.result}`;
+      });
+      const pts = skillPoints(db, level);
+      const out = { hero: id, level, points: pts, spent: treeSpent(h, tree), tried, unlocked: tree, stats: treeStats(h, level, tree), skills: treeSkills(h, level, tree) };
+      if (o.json) return console.log(JSON.stringify(out, null, 2));
+      const nm = (t: { th: string; en: string; ms?: string }) => (t as Record<string, string>)[o.lang] || t.en;
+      console.log(`${nm(h.name)} Lv ${level} · points ${pts} · spent ${out.spent} · left ${pts - out.spent}`);
+      if (tried.length) console.log(`  tried: ${tried.join("  ")}`);
+      for (const n of h.tree ?? []) {
+        const st = tree.includes(n.id) ? "■ unlocked" : `□ ${treeCheck(db, h, level, tree, n.id)}`;
+        const gives = [n.skill ? `skill ${n.skill}` : "", ...Object.entries(n.stats ?? {}).map(([k, v]) => `${k}+${v}`)].filter(Boolean).join(" ");
+        console.log(`  ${(n.branch ?? "").padEnd(7)} ${n.id.padEnd(14)} ${nm(n.name).padEnd(14)} cost ${n.cost ?? 1}${n.level ? ` lv${n.level}` : ""}${n.requires?.length ? ` ← ${n.requires.join(",")}` : ""}  ${gives}  ${st}`);
+      }
+      console.log(`  stats ${Object.entries(out.stats).map(([k, v]) => `${k} ${v}`).join(" · ")}`);
+      console.log(`  skills ${out.skills.join(", ")}`);
     } catch (e) {
       fail(e);
     }

@@ -46,10 +46,14 @@ func _init(database: Dictionary, setup: Dictionary) -> void:
 	for p in setup["party"]:
 		var h: Dictionary = _heroes[p["id"]]
 		var lv := int(p["level"])
-		var mx := hero_stats(h, lv)
+		var tr: Array = p.get("tree", [])
+		var mx := tree_stats(h, lv, tr)
 		var hp := mini(int(mx["hp"]), int(p.get("hp", mx["hp"])))
 		var mp := mini(int(mx["mp"]), int(p.get("mp", mx["mp"])))
-		actors.append({"side": 0, "index": i, "id": h["id"], "name": h["name"], "level": lv, "hp": hp, "mp": mp, "max": mx, "statuses": [], "defending": false, "skills": hero_skills(h, lv), "weak": h.get("weak", []), "resist": h.get("resist", []), "immune": [], "xp": int(p.get("xp", 0))})
+		var actor := {"side": 0, "index": i, "id": h["id"], "name": h["name"], "level": lv, "hp": hp, "mp": mp, "max": mx, "statuses": [], "defending": false, "skills": tree_skills(h, lv, tr), "weak": h.get("weak", []), "resist": h.get("resist", []), "immune": [], "xp": int(p.get("xp", 0))}
+		if p.has("tree"):
+			actor["tree"] = tr.duplicate()
+		actors.append(actor)
 		i += 1
 	i = 0
 	for x in setup["enemies"]:
@@ -216,6 +220,64 @@ static func hero_skills(h: Dictionary, level: int) -> Array:
 	for l in h["skills"]:
 		if int(l["level"]) <= level:
 			out.append(l["skill"])
+	return out
+
+
+# ---- skill trees (same rules as the TypeScript engine) ----
+static func skill_points(database: Dictionary, level: int) -> int:
+	return maxi(0, level - 1) * int(database["rules"].get("pointsPerLevel", 1))
+
+
+static func tree_spent(h: Dictionary, unlocked: Array) -> int:
+	var n := 0
+	for node in h.get("tree", []):
+		if unlocked.has(node["id"]):
+			n += int(node.get("cost", 1))
+	return n
+
+
+## "ok" or why not: unknown_node · unlocked · level:N · requires:<id> · points
+static func tree_check(database: Dictionary, h: Dictionary, level: int, unlocked: Array, node_id: String) -> String:
+	var node = null
+	for x in h.get("tree", []):
+		if x["id"] == node_id:
+			node = x
+	if node == null:
+		return "unknown_node"
+	if unlocked.has(node_id):
+		return "unlocked"
+	if level < int(node.get("level", 1)):
+		return "level:%d" % int(node["level"])
+	for r in node.get("requires", []):
+		if not unlocked.has(r):
+			return "requires:%s" % r
+	if skill_points(database, level) - tree_spent(h, unlocked) < int(node.get("cost", 1)):
+		return "points"
+	return "ok"
+
+
+static func tree_unlock(database: Dictionary, h: Dictionary, level: int, unlocked: Array, node_id: String) -> Dictionary:
+	var result := tree_check(database, h, level, unlocked, node_id)
+	var out := unlocked.duplicate()
+	if result == "ok":
+		out.append(node_id)
+	return {"result": result, "tree": out}
+
+
+static func tree_stats(h: Dictionary, level: int, unlocked: Array = []) -> Dictionary:
+	var out := hero_stats(h, level)
+	for node in h.get("tree", []):
+		if unlocked.has(node["id"]) and node.has("stats"):
+			for k in node["stats"]:
+				out[k] = int(out.get(k, 0)) + int(node["stats"][k])
+	return out
+
+
+static func tree_skills(h: Dictionary, level: int, unlocked: Array = []) -> Array:
+	var out := hero_skills(h, level)
+	for node in h.get("tree", []):
+		if node.has("skill") and unlocked.has(node["id"]) and not out.has(node["skill"]):
+			out.append(node["skill"])
 	return out
 
 
@@ -654,11 +716,14 @@ func rewards() -> Dictionary:
 					learned.append(l["skill"])
 		if level != int(a["level"]):
 			r["levels"].append({"id": a["id"], "from": int(a["level"]), "to": level, "learned": learned})
-		var mx := hero_stats(h, level)
+		var mx := tree_stats(h, level, a.get("tree", []))
 		var hp := int(a["hp"])
 		if level != int(a["level"]) and int(a["hp"]) > 0:
 			hp = mini(int(mx["hp"]), int(a["hp"]) + (int(mx["hp"]) - int(a["max"]["hp"])))
-		r["party"].append({"id": a["id"], "level": level, "hp": maxi(1 if over == "lose" else 0, hp), "mp": int(a["mp"]), "xp": xp})
+		var pm := {"id": a["id"], "level": level, "hp": maxi(1 if over == "lose" else 0, hp), "mp": int(a["mp"]), "xp": xp}
+		if a.has("tree"):
+			pm["tree"] = a["tree"].duplicate()
+		r["party"].append(pm)
 	return r
 
 

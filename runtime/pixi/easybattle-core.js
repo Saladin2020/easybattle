@@ -37,6 +37,40 @@ function enemyStats(db, e, level) {
 function heroSkills(h, level) {
   return h.skills.filter((l) => l.level <= level).map((l) => l.skill);
 }
+function skillPoints(db, level) {
+  return Math.max(0, level - 1) * (db.rules.pointsPerLevel ?? 1);
+}
+function treeSpent(h, unlocked) {
+  let n = 0;
+  for (const node of h.tree ?? []) if (unlocked.includes(node.id)) n += node.cost ?? 1;
+  return n;
+}
+function treeCheck(db, h, level, unlocked, nodeId) {
+  const node = (h.tree ?? []).find((x) => x.id === nodeId);
+  if (!node) return "unknown_node";
+  if (unlocked.includes(nodeId)) return "unlocked";
+  if (level < (node.level ?? 1)) return `level:${node.level}`;
+  for (const r of node.requires ?? []) if (!unlocked.includes(r)) return `requires:${r}`;
+  if (skillPoints(db, level) - treeSpent(h, unlocked) < (node.cost ?? 1)) return "points";
+  return "ok";
+}
+function treeUnlock(db, h, level, unlocked, nodeId) {
+  const result = treeCheck(db, h, level, unlocked, nodeId);
+  return { result, tree: result === "ok" ? [...unlocked, nodeId] : [...unlocked] };
+}
+function treeStats(h, level, unlocked = []) {
+  const out = heroStats(h, level);
+  for (const node of h.tree ?? []) {
+    if (!unlocked.includes(node.id) || !node.stats) continue;
+    for (const k of Object.keys(node.stats)) out[k] = (out[k] ?? 0) + (node.stats[k] ?? 0);
+  }
+  return out;
+}
+function treeSkills(h, level, unlocked = []) {
+  const out = heroSkills(h, level);
+  for (const node of h.tree ?? []) if (node.skill && unlocked.includes(node.id) && !out.includes(node.skill)) out.push(node.skill);
+  return out;
+}
 var Battle = class {
   constructor(db, setup) {
     __publicField(this, "db", db);
@@ -62,8 +96,8 @@ var Battle = class {
     setup.party.forEach((p, i) => {
       const h = db.heroes.find((x) => x.id === p.id);
       if (!h) throw new Error(`Unknown hero "${p.id}"`);
-      const max = heroStats(h, p.level);
-      this.actors.push({ side: 0, index: i, id: h.id, name: h.name, level: p.level, hp: Math.min(max.hp, p.hp ?? max.hp), mp: Math.min(max.mp, p.mp ?? max.mp), max, statuses: [], defending: false, skills: heroSkills(h, p.level), weak: h.weak ?? [], resist: h.resist ?? [], immune: [], xp: p.xp ?? 0 });
+      const max = treeStats(h, p.level, p.tree);
+      this.actors.push({ side: 0, index: i, id: h.id, name: h.name, level: p.level, hp: Math.min(max.hp, p.hp ?? max.hp), mp: Math.min(max.mp, p.mp ?? max.mp), max, statuses: [], defending: false, skills: treeSkills(h, p.level, p.tree), ...p.tree ? { tree: [...p.tree] } : {}, weak: h.weak ?? [], resist: h.resist ?? [], immune: [], xp: p.xp ?? 0 });
     });
     setup.enemies.forEach((x, i) => {
       const e = db.enemies.find((y) => y.id === x.id);
@@ -524,9 +558,9 @@ var Battle = class {
         for (const l of h.skills) if (l.level === level) learned.push(l.skill);
       }
       if (level !== a.level) r.levels.push({ id: a.id, from: a.level, to: level, learned });
-      const max = heroStats(h, level);
+      const max = treeStats(h, level, a.tree);
       const hp = level !== a.level && a.hp > 0 ? Math.min(max.hp, a.hp + (max.hp - a.max.hp)) : a.hp;
-      r.party.push({ id: a.id, level, hp: Math.max(this.over === "lose" ? 1 : 0, hp), mp: a.mp, xp });
+      r.party.push({ id: a.id, level, hp: Math.max(this.over === "lose" ? 1 : 0, hp), mp: a.mp, xp, ...a.tree ? { tree: [...a.tree] } : {} });
     }
     return r;
   }
@@ -578,5 +612,11 @@ export {
   pickTable,
   rollEncounter,
   rollGroup,
+  skillPoints,
+  treeCheck,
+  treeSkills,
+  treeSpent,
+  treeStats,
+  treeUnlock,
   xpToNext
 };

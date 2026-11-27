@@ -75,6 +75,25 @@ export interface SkillDef {
   sfx?: string;
 }
 
+/** A skill-tree node: spend `cost` skill points (from `rules.pointsPerLevel` per level) once its `requires` are unlocked. */
+export interface TreeNode {
+  id: string;
+  name: Name;
+  desc?: Name;
+  /** Branch id for the UI (e.g. "fist", "guard"). */
+  branch?: string;
+  /** Grid position [column, row] for the UI. */
+  pos?: [number, number];
+  cost?: number;
+  /** Hero level needed. */
+  level?: number;
+  requires?: string[];
+  /** Flat stat bonus. */
+  stats?: Partial<Stats>;
+  /** Skill learned. */
+  skill?: string;
+}
+
 export interface Learn {
   level: number;
   skill: string;
@@ -88,6 +107,8 @@ export interface HeroDef {
   /** Added per level (fractions allowed; floor(base + growth × (level − 1))). */
   growth: Partial<Stats>;
   skills: Learn[];
+  /** Skill tree (unlocked node ids live in the save: PartyMember.tree). */
+  tree?: TreeNode[];
   weak?: string[];
   resist?: string[];
   /** Easy Sprite sheet id / path (engine side) and Easy Portrait / Easy Dialogue portrait set. */
@@ -174,6 +195,8 @@ export interface Rules {
   flee: number;
   /** % extra enemy stats per level above its base level. */
   enemyScale: number;
+  /** Skill points gained per level above 1 (default 1). */
+  pointsPerLevel?: number;
   startCoins?: number;
   /** Overworld ground code → terrain (Easy Tilemap codes). */
   terrainCodes: Record<string, Terrain>;

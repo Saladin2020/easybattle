@@ -38,6 +38,7 @@ export interface Actor {
   resist: string[];
   immune: string[];
   xp: number;
+  tree?: string[];
 }
 
 export type BattleEvent =
@@ -60,6 +61,8 @@ export type BattleEvent =
 export interface PartyMember {
   id: string;
   level: number;
+  /** Unlocked skill-tree node ids. */
+  tree?: string[];
   hp?: number;
   mp?: number;
   xp?: number;
@@ -124,6 +127,52 @@ export function heroSkills(h: HeroDef, level: number): string[] {
   return h.skills.filter((l) => l.level <= level).map((l) => l.skill);
 }
 
+// ---------------------------------------------------------------- skill trees
+/** Skill points earned by `level` (pointsPerLevel × (level − 1)). */
+export function skillPoints(db: BattleDb, level: number): number {
+  return Math.max(0, level - 1) * (db.rules.pointsPerLevel ?? 1);
+}
+
+export function treeSpent(h: HeroDef, unlocked: string[]): number {
+  let n = 0;
+  for (const node of h.tree ?? []) if (unlocked.includes(node.id)) n += node.cost ?? 1;
+  return n;
+}
+
+/** "ok" or why a node cannot be unlocked: unknown_node · unlocked · level:N · requires:<id> · points. */
+export function treeCheck(db: BattleDb, h: HeroDef, level: number, unlocked: string[], nodeId: string): string {
+  const node = (h.tree ?? []).find((x) => x.id === nodeId);
+  if (!node) return "unknown_node";
+  if (unlocked.includes(nodeId)) return "unlocked";
+  if (level < (node.level ?? 1)) return `level:${node.level}`;
+  for (const r of node.requires ?? []) if (!unlocked.includes(r)) return `requires:${r}`;
+  if (skillPoints(db, level) - treeSpent(h, unlocked) < (node.cost ?? 1)) return "points";
+  return "ok";
+}
+
+/** Unlock a node: returns the reason and the new unlocked list (unchanged unless "ok"). */
+export function treeUnlock(db: BattleDb, h: HeroDef, level: number, unlocked: string[], nodeId: string): { result: string; tree: string[] } {
+  const result = treeCheck(db, h, level, unlocked, nodeId);
+  return { result, tree: result === "ok" ? [...unlocked, nodeId] : [...unlocked] };
+}
+
+/** Level stats plus the flat bonuses of unlocked nodes. */
+export function treeStats(h: HeroDef, level: number, unlocked: string[] = []): Stats {
+  const out = heroStats(h, level);
+  for (const node of h.tree ?? []) {
+    if (!unlocked.includes(node.id) || !node.stats) continue;
+    for (const k of Object.keys(node.stats) as Stat[]) out[k] = (out[k] ?? 0) + (node.stats[k] ?? 0);
+  }
+  return out;
+}
+
+/** Level skills plus the skills of unlocked nodes (no duplicates, level skills first). */
+export function treeSkills(h: HeroDef, level: number, unlocked: string[] = []): string[] {
+  const out = heroSkills(h, level);
+  for (const node of h.tree ?? []) if (node.skill && unlocked.includes(node.id) && !out.includes(node.skill)) out.push(node.skill);
+  return out;
+}
+
 export class Battle {
   actors: Actor[] = [];
   round = 0;
@@ -151,8 +200,8 @@ export class Battle {
     setup.party.forEach((p, i) => {
       const h = db.heroes.find((x) => x.id === p.id);
       if (!h) throw new Error(`Unknown hero "${p.id}"`);
-      const max = heroStats(h, p.level);
-      this.actors.push({ side: 0, index: i, id: h.id, name: h.name, level: p.level, hp: Math.min(max.hp, p.hp ?? max.hp), mp: Math.min(max.mp, p.mp ?? max.mp), max, statuses: [], defending: false, skills: heroSkills(h, p.level), weak: h.weak ?? [], resist: h.resist ?? [], immune: [], xp: p.xp ?? 0 });
+      const max = treeStats(h, p.level, p.tree);
+      this.actors.push({ side: 0, index: i, id: h.id, name: h.name, level: p.level, hp: Math.min(max.hp, p.hp ?? max.hp), mp: Math.min(max.mp, p.mp ?? max.mp), max, statuses: [], defending: false, skills: treeSkills(h, p.level, p.tree), ...(p.tree ? { tree: [...p.tree] } : {}), weak: h.weak ?? [], resist: h.resist ?? [], immune: [], xp: p.xp ?? 0 });
     });
     setup.enemies.forEach((x, i) => {
       const e = db.enemies.find((y) => y.id === x.id);
@@ -642,9 +691,9 @@ export class Battle {
         for (const l of h.skills) if (l.level === level) learned.push(l.skill);
       }
       if (level !== a.level) r.levels.push({ id: a.id, from: a.level, to: level, learned });
-      const max = heroStats(h, level);
+      const max = treeStats(h, level, a.tree);
       const hp = level !== a.level && a.hp > 0 ? Math.min(max.hp, a.hp + (max.hp - a.max.hp)) : a.hp;
-      r.party.push({ id: a.id, level, hp: Math.max(this.over === "lose" ? 1 : 0, hp), mp: a.mp, xp });
+      r.party.push({ id: a.id, level, hp: Math.max(this.over === "lose" ? 1 : 0, hp), mp: a.mp, xp, ...(a.tree ? { tree: [...a.tree] } : {}) });
     }
     return r;
   }

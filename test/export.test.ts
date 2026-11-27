@@ -67,7 +67,7 @@ describe("export", () => {
   it("parity cases are stable", async () => {
     const db = await loadDbStrict(root);
     const a = parityCases(db);
-    expect(a.map((c) => c.name)).toEqual(["auto_village", "scripted_mix", "atb_wait", "atb_active", "boss", "generic"]);
+    expect(a.map((c) => c.name)).toEqual(["auto_village", "scripted_mix", "atb_wait", "atb_active", "skill_tree", "boss", "generic"]);
     expect(parityCases(db)).toEqual(a);
   });
 

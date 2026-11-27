@@ -16,7 +16,8 @@
     },
     "crit": 6,
     "flee": 50,
-    "enemyScale": 8
+    "enemyScale": 8,
+    "pointsPerLevel": 1
   },
   "elements": [
     {
@@ -614,6 +615,72 @@
       "element": "wind",
       "fx": "falling_leaves",
       "sfx": "jump"
+    },
+    {
+      "id": "flying_knee",
+      "name": {
+        "th": "เข่าลอย",
+        "en": "Flying knee",
+        "ms": "Lutut terbang"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 24,
+      "mp": 8,
+      "accuracy": 85,
+      "fx": "slash_arc",
+      "sfx": "hurt"
+    },
+    {
+      "id": "tiger_step",
+      "name": {
+        "th": "ท่าเสือซีลัต",
+        "en": "Tiger step",
+        "ms": "Langkah harimau"
+      },
+      "kind": "physical",
+      "target": "enemy",
+      "power": 16,
+      "mp": 5,
+      "status": {
+        "id": "slow",
+        "chance": 40
+      },
+      "fx": "slash_arc",
+      "sfx": "hurt"
+    },
+    {
+      "id": "kite_storm",
+      "name": {
+        "th": "พายุว่าว",
+        "en": "Kite storm",
+        "ms": "Ribut wau"
+      },
+      "kind": "magic",
+      "target": "all_enemies",
+      "power": 10,
+      "mp": 10,
+      "element": "wind",
+      "fx": "falling_leaves",
+      "sfx": "jump"
+    },
+    {
+      "id": "net_throw",
+      "name": {
+        "th": "เหวี่ยงแห",
+        "en": "Net throw",
+        "ms": "Lempar jala"
+      },
+      "kind": "debuff",
+      "target": "all_enemies",
+      "mp": 6,
+      "accuracy": 90,
+      "status": {
+        "id": "slow",
+        "chance": 60
+      },
+      "fx": "water_splash",
+      "sfx": "blip"
     }
   ],
   "heroes": [
@@ -666,7 +733,85 @@
       ],
       "sprite": "ton",
       "portrait": "ton",
-      "color": "#f4ae3d"
+      "color": "#f4ae3d",
+      "tree": [
+        {
+          "id": "ton_fist",
+          "name": {
+            "th": "หมัดหนัก",
+            "en": "Heavy fists",
+            "ms": "Tumbukan berat"
+          },
+          "branch": "strike",
+          "pos": [
+            0,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "atk": 3
+          }
+        },
+        {
+          "id": "ton_knee",
+          "name": {
+            "th": "เข่าลอย",
+            "en": "Flying knee",
+            "ms": "Lutut terbang"
+          },
+          "branch": "strike",
+          "pos": [
+            0,
+            1
+          ],
+          "cost": 2,
+          "level": 4,
+          "requires": [
+            "ton_fist"
+          ],
+          "skill": "flying_knee"
+        },
+        {
+          "id": "ton_guard",
+          "name": {
+            "th": "การ์ดแน่น",
+            "en": "Tight guard",
+            "ms": "Kawalan rapat"
+          },
+          "branch": "guard",
+          "pos": [
+            1,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "def": 3,
+            "hp": 10
+          }
+        },
+        {
+          "id": "ton_spirit",
+          "name": {
+            "th": "ใจนักสู้",
+            "en": "Fighter's heart",
+            "ms": "Semangat pejuang"
+          },
+          "branch": "guard",
+          "pos": [
+            1,
+            1
+          ],
+          "cost": 2,
+          "level": 5,
+          "requires": [
+            "ton_guard"
+          ],
+          "stats": {
+            "hp": 25,
+            "spd": 2
+          }
+        }
+      ]
     },
     {
       "id": "nurul",
@@ -725,7 +870,83 @@
       ],
       "sprite": "nurul",
       "portrait": "nurul",
-      "color": "#2f7a6a"
+      "color": "#2f7a6a",
+      "tree": [
+        {
+          "id": "nurul_herbs",
+          "name": {
+            "th": "สมุนไพรดี",
+            "en": "Good herbs",
+            "ms": "Herba baik"
+          },
+          "branch": "herbal",
+          "pos": [
+            0,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "mag": 2,
+            "mp": 6
+          }
+        },
+        {
+          "id": "nurul_mist",
+          "name": {
+            "th": "ยาหอมทั่วทีม",
+            "en": "Herbal mist",
+            "ms": "Kabus herba"
+          },
+          "branch": "herbal",
+          "pos": [
+            0,
+            1
+          ],
+          "cost": 2,
+          "level": 5,
+          "requires": [
+            "nurul_herbs"
+          ],
+          "skill": "jamu_all"
+        },
+        {
+          "id": "nurul_silat",
+          "name": {
+            "th": "ซีลัตว่องไว",
+            "en": "Swift silat",
+            "ms": "Silat pantas"
+          },
+          "branch": "silat",
+          "pos": [
+            1,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "spd": 2,
+            "atk": 2
+          }
+        },
+        {
+          "id": "nurul_tiger",
+          "name": {
+            "th": "ท่าเสือ",
+            "en": "Tiger step",
+            "ms": "Langkah harimau"
+          },
+          "branch": "silat",
+          "pos": [
+            1,
+            1
+          ],
+          "cost": 2,
+          "level": 4,
+          "requires": [
+            "nurul_silat"
+          ],
+          "skill": "tiger_step"
+        }
+      ]
     },
     {
       "id": "mei",
@@ -784,7 +1005,82 @@
       ],
       "sprite": "mei",
       "portrait": "mei",
-      "color": "#c8402e"
+      "color": "#c8402e",
+      "tree": [
+        {
+          "id": "mei_spark",
+          "name": {
+            "th": "ประทัดแรง",
+            "en": "Bigger bangs",
+            "ms": "Mercun kuat"
+          },
+          "branch": "fire",
+          "pos": [
+            0,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "mag": 3
+          }
+        },
+        {
+          "id": "mei_drum",
+          "name": {
+            "th": "กลองฟ้า",
+            "en": "Sky drum",
+            "ms": "Gendang langit"
+          },
+          "branch": "fire",
+          "pos": [
+            0,
+            1
+          ],
+          "cost": 2,
+          "level": 6,
+          "requires": [
+            "mei_spark"
+          ],
+          "skill": "thunder_drum"
+        },
+        {
+          "id": "mei_string",
+          "name": {
+            "th": "สายป่านยาว",
+            "en": "Long kite string",
+            "ms": "Tali wau panjang"
+          },
+          "branch": "wind",
+          "pos": [
+            1,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "spd": 2,
+            "res": 2
+          }
+        },
+        {
+          "id": "mei_storm",
+          "name": {
+            "th": "พายุว่าว",
+            "en": "Kite storm",
+            "ms": "Ribut wau"
+          },
+          "branch": "wind",
+          "pos": [
+            1,
+            1
+          ],
+          "cost": 2,
+          "level": 5,
+          "requires": [
+            "mei_string"
+          ],
+          "skill": "kite_storm"
+        }
+      ]
     },
     {
       "id": "adam",
@@ -838,7 +1134,83 @@
       ],
       "sprite": "adam",
       "portrait": "adam",
-      "color": "#3c8ce8"
+      "color": "#3c8ce8",
+      "tree": [
+        {
+          "id": "adam_oar",
+          "name": {
+            "th": "พายแกร่ง",
+            "en": "Strong oar",
+            "ms": "Dayung kuat"
+          },
+          "branch": "oar",
+          "pos": [
+            0,
+            0
+          ],
+          "cost": 1,
+          "stats": {
+            "atk": 2,
+            "def": 2
+          }
+        },
+        {
+          "id": "adam_charge",
+          "name": {
+            "th": "พุ่งชน",
+            "en": "Charge",
+            "ms": "Rempuh"
+          },
+          "branch": "oar",
+          "pos": [
+            0,
+            1
+          ],
+          "cost": 2,
+          "level": 4,
+          "requires": [
+            "adam_oar"
+          ],
+          "skill": "charge"
+        },
+        {
+          "id": "adam_net",
+          "name": {
+            "th": "เหวี่ยงแห",
+            "en": "Net throw",
+            "ms": "Lempar jala"
+          },
+          "branch": "sea",
+          "pos": [
+            1,
+            0
+          ],
+          "cost": 1,
+          "skill": "net_throw"
+        },
+        {
+          "id": "adam_sea",
+          "name": {
+            "th": "ลูกทะเล",
+            "en": "Child of the sea",
+            "ms": "Anak laut"
+          },
+          "branch": "sea",
+          "pos": [
+            1,
+            1
+          ],
+          "cost": 2,
+          "level": 5,
+          "requires": [
+            "adam_net"
+          ],
+          "stats": {
+            "hp": 20,
+            "res": 3
+          }
+        }
+      ]
     }
   ],
   "items": [
