@@ -93,6 +93,24 @@ func _init() -> void:
 					fail = true
 				rolls += 1
 	print("E| tables=%d rolls=%d" % [tables, rolls])
+	var tree_runs := 0
+	for tp in parity.get("trees", []):
+		var h = null
+		for x in db["heroes"]:
+			if x["id"] == tp["hero"]:
+				h = x
+		for run in tp["runs"]:
+			var tr: Array = []
+			var res: Array = []
+			for node in h["tree"] + h["tree"]:
+				var r: Dictionary = EasyBattleEngine.tree_unlock(db, h, int(run["level"]), tr, node["id"])
+				res.append(r["result"])
+				tr = r["tree"]
+			if res != run["results"] or tr != run["tree"]:
+				print("FAIL tree %s lv %d: gd %s %s ts %s %s" % [tp["hero"], int(run["level"]), res, tr, run["results"], run["tree"]])
+				fail = true
+			tree_runs += 1
+	print("T| tree runs=%d" % tree_runs)
 	# scene run
 	var root_node := Node.new()
 	get_root().add_child(root_node)

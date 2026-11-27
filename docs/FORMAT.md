@@ -87,3 +87,10 @@ RNG: mulberry32(seed); the Godot port draws in the same order. Encounter group r
 elements, statuses, enemies in groups), duplicates, bad numbers, empty groups, more than 5 enemies, missing names,
 content rules. Warnings: unused skills, heroes without a sprite sheet, items or regions missing from the
 cross-checked Easy Items workspace / overworld map.
+
+## Skill trees
+
+`hero.tree: [{ id, name, desc?, branch?, pos? [col, row], cost = 1, level?, requires? [earlier node ids], stats? { flat bonus }, skill? }]`,
+`rules.pointsPerLevel = 1`. Points at level L = pointsPerLevel × (L − 1). `treeCheck` answers `ok`, `unknown_node`,
+`unlocked`, `level:N`, `requires:<id>` or `points`. A party member's `tree` (unlocked ids) adds the node stats to its
+level stats and the node skills after its level skills; rewards keep it.

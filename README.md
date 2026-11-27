@@ -152,6 +152,14 @@ sequence. The Godot test replays four scripted battles and 60 encounter rolls an
 TypeScript results, then runs the back-view layout in Thai, English and Malay (fits 480 × 270, no overlaps, card
 text inside its cells, READY! / WAIT... / DOWN states).
 
+## Skill trees
+
+Each hero can have a `tree` of nodes (two branches each in the starter set: Ton strike / guard, Nurul herbal / silat,
+Mei fire / wind, Adam oar / sea). Heroes earn `rules.pointsPerLevel` skill points per level; a node costs `cost`
+points, may need a hero `level` and earlier nodes (`requires`), and gives flat `stats` and/or a `skill`. Unlocked
+node ids are saved per party member (`{ id, level, tree: [...] }`) and the battle engine applies them in TS, Pixi
+and Godot (parity-tested). `easybattle tree mei --level 6 --unlock mei_spark,mei_string,mei_storm`, MCP `skill_tree`.
+
 ## Export
 
 | Preset | What you get |

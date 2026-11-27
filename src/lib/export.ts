@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { canon } from "../shared/canon.js";
-import { Battle, groupSeed, PARITY_SETUP, rollGroup, type Action, type BattleSetup } from "../shared/engine.js";
+import { Battle, groupSeed, PARITY_SETUP, rollGroup, treeUnlock, type Action, type BattleSetup } from "../shared/engine.js";
 import { mulberry32 } from "../shared/rng.js";
 import { EXPORT_PRESETS, type BattleDb, type ExportPreset } from "../shared/types.js";
 import { exportLayouts, HERO_FRAMES, PORTRAIT_CROP, resolveUi, SHEET_ROW, UI_TEXT } from "../shared/layout.js";
@@ -67,6 +67,15 @@ export function parityCases(db: BattleDb) {
     cases.push({ name: "atb_wait", setup: { party, enemies, seed: 31, items: {}, timing: "atb", atbMode: "wait" }, actions: steps });
     cases.push({ name: "atb_active", setup: { party, enemies, seed: 32, items: {}, timing: "atb", atbMode: "active" }, actions: steps });
   }
+  const treeHeroes = db.heroes.filter((h) => h.tree?.length).slice(0, 3);
+  if (treeHeroes.length && db.enemies.length) {
+    const party = treeHeroes.map((h) => {
+      let tree: string[] = [];
+      for (const n of h.tree!) tree = treeUnlock(db, h, 7, tree, n.id).tree;
+      return { id: h.id, level: 7, tree };
+    });
+    cases.push({ name: "skill_tree", setup: { party, enemies: db.enemies.filter((e) => !e.boss).slice(0, 3).map((e) => ({ id: e.id, level: e.level + 3 })), seed: 515, items: {} }, actions: [] });
+  }
   const boss = db.enemies.find((e) => e.boss);
   if (boss && heroes.length >= 3) cases.push({ name: "boss", setup: { party: heroes.slice(0, 3).map((id) => ({ id, level: boss.level + 1 })), enemies: [{ id: boss.id }], seed: 4242, items: Object.fromEntries(db.items.slice(0, 2).map((i) => [i.item, 2])) }, actions: [] });
   const e0 = db.enemies.filter((e) => !e.boss).slice(0, 3);
@@ -84,6 +93,23 @@ export function parityCases(db: BattleDb) {
     b.autoRun();
     return { ...c, snapshot: canon(b.snapshot()), log: fnv1a(canon(b.log)), rewards: canon(b.rewards()) };
   });
+}
+
+/** Unlock every node in file order at levels 1, 4, 6 and 12 (test_battle.gd replays with tree_unlock). */
+export function treeParity(db: BattleDb) {
+  return db.heroes.filter((h) => h.tree?.length).map((h) => ({
+    hero: h.id,
+    runs: [1, 4, 6, 12].map((level) => {
+      let tree: string[] = [];
+      const results: string[] = [];
+      for (const n of [...h.tree!, ...h.tree!]) {
+        const r = treeUnlock(db, h, level, tree, n.id);
+        results.push(r.result);
+        tree = r.tree;
+      }
+      return { level, results, tree };
+    }),
+  }));
 }
 
 /** Group rolls per table for seeds 1..6 (test_battle.gd compares Battle.encounter_setup with these). */
@@ -383,7 +409,7 @@ async function exportGodot(w: Writer, root: string, db: BattleDb, res: ExportRes
   if (bundle) await bundleAssets(w, db, res, "easybattle/");
   res.fonts = font ? await bundleFont(w, res, "godot") : [];
   await w.write("easybattle/easybattle.json", `${JSON.stringify({ format: "easybattle-export/1", version: VERSION, db, fx: res.fx, sfx: res.sfx, itemNames: await itemNamesFor(root, db), ui: uiData(db, res.fonts) }, null, 2)}\n`);
-  await w.write("easybattle/parity.json", `${JSON.stringify({ cases: parityCases(db), encounters: encounterParity(db) }, null, 2)}\n`);
+  await w.write("easybattle/parity.json", `${JSON.stringify({ cases: parityCases(db), encounters: encounterParity(db), trees: treeParity(db) }, null, 2)}\n`);
   for (const f of ["easybattle.gd", "battle_engine.gd", "battle_scene.gd", "battle_scene.tscn"]) await w.copy(path.join(g, f), `easybattle/${f}`);
   for (const f of ["Kanit-Regular.ttf", "OFL.txt"]) await w.copy(path.join(FONT_DIR, f), `easybattle/fonts/${f}`);
   for (const f of ["main.gd", "test_battle.gd", "capture.gd"]) await w.copy(path.join(g, f), f);

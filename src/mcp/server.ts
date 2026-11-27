@@ -12,7 +12,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import path from "node:path";
 import { z } from "zod";
 import { entrySummary } from "../shared/db.js";
-import { Battle, heroStats, rollEncounter, xpToNext } from "../shared/engine.js";
+import { Battle, heroStats, rollEncounter, skillPoints, treeCheck, treeSkills, treeSpent, treeStats, treeUnlock, xpToNext } from "../shared/engine.js";
 import { CULTURES, ENEMY_ART, FORMAT, SKILL_KINDS, STATUS_KINDS, TARGETS, TERRAINS, UI_ATB_MODES, UI_BACKDROPS, UI_LAYOUTS, UI_STATUS, UI_TIMING } from "../shared/types.js";
 import { bestiaryRaster, EXPORT_PRESETS, exportBattle } from "../lib/export.js";
 import { encodePng } from "../lib/png.js";
@@ -20,7 +20,7 @@ import { renderBattlePng } from "../lib/render.js";
 import { checkWorkspace, loadDb, loadDbStrict, readDoc, resolveWorkspace, saveDoc, workspaceSummary } from "../lib/workspace.js";
 import { isEntry, mcpErr as err, mcpMsg as msg, mcpText as text, parseMcpArgs, startHttp } from "./http.js";
 
-export const MCP_TOOL_NAMES = ["workspace_info", "list_entries", "get_entry", "write_battles", "check_battles", "simulate_battle", "roll_encounter", "render_battle", "export_battle"] as const;
+export const MCP_TOOL_NAMES = ["workspace_info", "list_entries", "get_entry", "write_battles", "check_battles", "simulate_battle", "roll_encounter", "skill_tree", "render_battle", "export_battle"] as const;
 
 const IdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "Use a-z, 0-9, _ or -");
 
@@ -28,11 +28,11 @@ export const FORMAT_CHEATSHEET = `Document battles/<id>.easybattle.json: { forma
   element: { id, name, color #rrggbb }
   status:  { id, name, kind ${STATUS_KINDS.join("|")}, amount? (poison/regen % max HP per turn; atk/def/mag/spd multiplier %), turns }
   skill:   { id, name, desc?, kind ${SKILL_KINDS.join("|")}, target ${TARGETS.join("|")}, power? (10 = plain attack), mp?, element?, accuracy? 0..100, status? {id, chance?}, cures? [status ids], fx? (Easy FX preset), sfx? (Easy SFX sound) }
-  hero:    { id, name, role?, base {hp,mp,atk,def,mag,res,spd}, growth {per level, fractions ok}, skills [{level, skill}], weak?, resist?, sprite? (Easy Sprite side-view sheet id), portrait?, color? }
+  hero:    { id, name, role?, base {hp,mp,atk,def,mag,res,spd}, growth {per level, fractions ok}, skills [{level, skill}], tree? [{ id, name, branch?, pos? [col,row], cost? (points, default 1), level?, requires? [earlier node ids], stats? {flat bonus}, skill? }], weak?, resist?, sprite? (Easy Sprite side-view sheet id), portrait?, color? }
   enemy:   { id, name, level, stats {hp,mp,atk,def,mag,res,spd}, skills [{skill, weight}], weak?, resist?, immune?, xp, coins, drops? [{item (Easy Items id), chance %, n?}], loot? (Easy Items loot table), art ${ENEMY_ART.join("|")}, palette? [3 colours], boss? }
   encounter: { id, name?, regions? (Easy Tilemap overworld region ids), cultures? ${CULTURES.join("|")}, terrains [${TERRAINS.join("|")}], rate (avg steps), groups [{enemies [≤5 ids], weight, levelBonus?}], music?, background?, scripted? (bosses) }
   item:    { item (Easy Items id), hp?, mp?, cures?, target? ally|all_allies }
-  rules:   { maxLevel, partySize, xp {base, step, quad}: next(L) = base + step·(L−1) + quad·(L−1)², crit %, flee %, enemyScale %/level, terrainCodes {overworld ground code: terrain} }
+  rules:   { pointsPerLevel? (skill points per level above 1, default 1), maxLevel, partySize, xp {base, step, quad}: next(L) = base + step·(L−1) + quad·(L−1)², crit %, flee %, enemyScale %/level, terrainCodes {overworld ground code: terrain} }
   ui:      { layout? ${UI_LAYOUTS.join("|")} (backview = 16-bit back view: blue message window, enemies on a backdrop, party from behind with HP arcs), status? ${UI_STATUS.join("|")} (cards = Easy Portrait face, Lv, LIFE/POW bars, READY!/WAIT...; backview defaults to cards), backdrop? ${UI_BACKDROPS.join("|")}, timing? ${UI_TIMING.join("|")} (atb = active time battle: gauges fill by SPD, READY! opens the menu, WAIT... cards show a filling time bar, enemies act when full), atbMode? ${UI_ATB_MODES.join("|")} (wait = time stops in menus) } — battle screen; classic + rows + turn is the default
 Damage: physical = atk·power/10 − def/2, magic = mag·power/10 − res/2; ×0.9–1.1; crit ×1.5; weak ×1.5; resist ×0.5; defend ×0.5; immune 0.
 Table pick: region id > culture > fallback. Content rules: no sacred figures, scripture or Arabic calligraphy as battle content; martial arts, herbs, firecrackers, kites and animals are fine; keep the cast multicultural.`;
@@ -120,6 +120,33 @@ export function createEasyBattleMcp(workspaceRoot: string): McpServer {
         b.autoRun();
         const log = b.log.filter((e) => e.t !== "turn").slice(0, 200);
         return text({ result: b.over, rounds: b.round, rewards: b.rewards(), snapshot: b.snapshot(), log });
+      } catch (e) {
+        return err(msg(e));
+      }
+    },
+  );
+
+  server.registerTool(
+    "skill_tree",
+    {
+      title: "Skill tree",
+      description: "A hero's skill tree at a level: points earned / spent / left, each node's status (ok, unlocked, level:N, requires:<id>, points), and stats + skills with the given unlocked nodes. Pass unlock to try unlocking nodes in order.",
+      inputSchema: { hero: IdSchema, level: z.number().int().min(1).max(99), unlocked: z.array(z.string()).max(64).optional(), unlock: z.array(z.string()).max(64).optional() },
+    },
+    async ({ hero, level, unlocked, unlock }) => {
+      try {
+        const db = await loadDbStrict(root);
+        const h = db.heroes.find((x) => x.id === hero);
+        if (!h) return err(`unknown hero "${hero}"`);
+        let tree = [...(unlocked ?? [])];
+        const tried = (unlock ?? []).map((id) => {
+          const r = treeUnlock(db, h, level, tree, id);
+          tree = r.tree;
+          return { id, result: r.result };
+        });
+        const points = skillPoints(db, level);
+        const spent = treeSpent(h, tree);
+        return text({ hero, level, points, spent, left: points - spent, tried, unlocked: tree, nodes: (h.tree ?? []).map((n) => ({ ...n, status: tree.includes(n.id) ? "unlocked" : treeCheck(db, h, level, tree, n.id) })), stats: treeStats(h, level, tree), skills: treeSkills(h, level, tree) });
       } catch (e) {
         return err(msg(e));
       }

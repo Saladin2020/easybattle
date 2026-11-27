@@ -18,7 +18,7 @@ const body = (r) => JSON.parse(r.content?.[0]?.text ?? "{}");
 async function exercise(client, label) {
   const tools = (await client.listTools()).tools.map((t) => t.name);
   console.log(`[${label}] tools (${tools.length}):`, tools.join(", "));
-  if (tools.length !== 9) fail(`${label}: expected 9 tools`);
+  if (tools.length !== 10) fail(`${label}: expected 10 tools`);
   const info = body(await client.callTool({ name: "workspace_info", arguments: {} }));
   console.log(`[${label}] heroes=${info.heroes?.length} enemies=${info.enemies?.length} skills=${info.skills?.length} tables=${info.encounters?.length}`);
   if (info.enemies?.length !== 17) fail(`${label}: workspace_info`);

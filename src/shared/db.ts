@@ -99,6 +99,26 @@ export function checkDoc(raw: unknown, d: Diags, file: string) {
     checkStats(h.base, `${p}.base`);
     checkStats(h.growth ?? {}, `${p}.growth`, true);
     if (!Array.isArray(h.skills)) d.error(`${p}.skills`, "skills [{ level, skill }] required");
+    if (h.tree !== undefined) {
+      if (!Array.isArray(h.tree)) d.error(`${p}.tree`, "array of nodes");
+      else {
+        const seen = new Set<string>();
+        h.tree.forEach((n, j) => {
+          const q = `${p}.tree[${j}]`;
+          if (!isObj(n)) return d.error(q, "must be an object");
+          checkId(n.id, d, `${q}.id`);
+          checkName(n.name, d, `${q}.name`);
+          if (typeof n.id === "string" && seen.has(n.id)) d.error(`${q}.id`, `duplicate node "${n.id}"`);
+          if (n.cost !== undefined && !(Number.isInteger(n.cost) && (n.cost as number) >= 1 && (n.cost as number) <= 20)) d.error(`${q}.cost`, "integer 1..20");
+          if (n.level !== undefined && !(Number.isInteger(n.level) && (n.level as number) >= 1)) d.error(`${q}.level`, "integer ≥ 1");
+          if (n.stats !== undefined) checkStats(n.stats, `${q}.stats`, true);
+          if (n.requires !== undefined && (!Array.isArray(n.requires) || n.requires.some((r) => typeof r !== "string" || !seen.has(r))))
+            d.error(`${q}.requires`, "ids of nodes listed earlier in the same tree");
+          if (n.skill === undefined && n.stats === undefined) d.warn(q, "node gives no skill and no stats");
+          if (typeof n.id === "string") seen.add(n.id);
+        });
+      }
+    }
   });
   arr("enemies").forEach((e, i) => {
     const p = `${file}.enemies[${i}]`;
@@ -173,6 +193,7 @@ export function buildDb(docs: Array<{ file: string; doc: unknown }>): { db: Batt
     for (const l of h.skills) if (!has("skills", l.skill)) d.error(`${p}.skills`, `unknown skill "${l.skill}"`);
     for (const e of [...(h.weak ?? []), ...(h.resist ?? [])]) el(e, `${p}.weak/resist`);
     if (!h.skills.some((l) => l.level <= 1)) d.warn(p, "hero has no level-1 skill (only Attack)");
+    for (const n of h.tree ?? []) if (n.skill && !has("skills", n.skill)) d.error(`${p}.tree.${n.id}.skill`, `unknown skill "${n.skill}"`);
   }
   for (const e of db.enemies) {
     const p = `${db.sources[`enemies:${e.id}`]}.enemies.${e.id}`;
